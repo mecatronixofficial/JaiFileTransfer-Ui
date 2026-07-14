@@ -1,10 +1,8 @@
 import type { NextConfig } from "next";
 
-const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-
-if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_BACKEND_URL) {
-  throw new Error("NEXT_PUBLIC_BACKEND_URL must be set to the deployed backend URL for production builds.");
-}
+const backendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  (process.env.NODE_ENV === "development" ? "http://localhost:5000" : undefined);
 
 const proxyClientMaxBodySize = (
   process.env.NEXT_PROXY_CLIENT_MAX_BODY_SIZE || "512mb"
@@ -15,6 +13,8 @@ const nextConfig: NextConfig = {
     proxyClientMaxBodySize,
   },
   async rewrites() {
+    if (!backendUrl) return [];
+
     return [
       {
         source: "/api/v1/:path*",
