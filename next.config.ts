@@ -1,8 +1,15 @@
 import type { NextConfig } from "next";
 
-const backendUrl =
+const configuredBackendUrl =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
   (process.env.NODE_ENV === "development" ? "http://localhost:5000" : undefined);
+
+const backendUrl = configuredBackendUrl
+  ? `${/^https?:\/\//i.test(configuredBackendUrl) ? "" : "https://"}${configuredBackendUrl}`.replace(
+      /\/$/,
+      "",
+    )
+  : undefined;
 
 const proxyClientMaxBodySize = (
   process.env.NEXT_PROXY_CLIENT_MAX_BODY_SIZE || "512mb"
