@@ -14,7 +14,13 @@ import { notifyAppDataChanged } from "@/lib/app-events";
 ========================= */
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL?.replace(/\/$/, "");
+const configuredBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+const BACKEND_URL = configuredBackendUrl
+  ? `${/^https?:\/\//i.test(configuredBackendUrl) ? "" : "https://"}${configuredBackendUrl}`.replace(
+      /\/$/,
+      "",
+    )
+  : undefined;
 const DIRECT_BACKEND_API_URL = BACKEND_URL ? `${BACKEND_URL}/api/v1` : undefined;
 const MAX_429_RETRIES = 3;
 const DEFAULT_429_WAIT_MS = 5000;
