@@ -483,27 +483,17 @@ function getLargeUploadApi(): AxiosInstance {
   });
 }
 
-function shouldFallbackToProxy(error: unknown): boolean {
-  return axios.isAxiosError(error) && !error.response;
-}
-
 async function postUploadForm(
   path: string,
   formData: FormData,
   config: AxiosRequestConfig<FormData>,
 ): Promise<UploadApiResponse> {
-  if (!DIRECT_BACKEND_API_URL) {
-    return getApi().post(path, formData, config);
-  }
-
-  try {
-    return await getLargeUploadApi().post(path, formData, config);
-  } catch (error) {
-    if (shouldFallbackToProxy(error)) {
-      return getApi().post(path, formData, config);
-    }
-    throw error;
-  }
+  // Keep regular uploads on the same origin as the application. In production,
+  // authentication cookies belong to the frontend domain and are not reliably
+  // available to a direct request to a separately hosted backend domain.
+  // Files at or above MULTIPART_THRESHOLD do not use this function; their bytes
+  // are sent directly to R2 with presigned multipart URLs.
+  return getApi().post(path, formData, config);
 }
 
 /* =========================
