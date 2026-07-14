@@ -2,11 +2,13 @@ import type { NextConfig } from "next";
 
 const configuredBackendUrl =
   process.env.NEXT_PUBLIC_BACKEND_URL ||
-  (process.env.NODE_ENV === "development" ? "http://localhost:5000" : undefined);
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:5000"
+    : "https://jai-file-transfer-server.vercel.app");
 
 const backendUrl = configuredBackendUrl
   ? `${/^https?:\/\//i.test(configuredBackendUrl) ? "" : "https://"}${configuredBackendUrl}`.replace(
-      /\/$/,
+      /\/(?:api\/v1)?\/?$/i,
       "",
     )
   : undefined;

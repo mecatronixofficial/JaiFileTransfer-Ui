@@ -14,10 +14,14 @@ import { notifyAppDataChanged } from "@/lib/app-events";
 ========================= */
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
-const configuredBackendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+const configuredBackendUrl =
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:5000"
+    : "https://jai-file-transfer-server.vercel.app");
 const BACKEND_URL = configuredBackendUrl
   ? `${/^https?:\/\//i.test(configuredBackendUrl) ? "" : "https://"}${configuredBackendUrl}`.replace(
-      /\/$/,
+      /\/(?:api\/v1)?\/?$/i,
       "",
     )
   : undefined;

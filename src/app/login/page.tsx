@@ -317,6 +317,7 @@ export default function LoginPage() {
                     alt="Secure file sharing"
                     width={400}
                     height={300}
+                    loading="eager"
                     sizes="(min-width: 1280px) 400px, (min-width: 1024px) 360px, 0px"
                     className="h-auto w-full object-contain transition-transform duration-700 group-hover:scale-[1.03]"
                   />

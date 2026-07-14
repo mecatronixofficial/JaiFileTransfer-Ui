@@ -9,13 +9,15 @@ npm install
 npm run dev
 ```
 
+Local development uses Webpack because Turbopack can intermittently fail to resolve the Next.js package on Windows. Run `bun run dev:turbopack` to test Turbopack explicitly.
+
 The app uses environment-specific files from the project root:
 
 - `.env.development` is loaded by `npm run dev` and points to the local backend at `http://localhost:5000`.
 - `.env.production` is loaded by `npm run build` and `npm start`. Set `NEXT_PUBLIC_BACKEND_URL` to enable the `/api/v1` backend proxy in production.
 - `NEXT_PUBLIC_API_URL` remains `/api/v1`, so browser requests use the Next.js rewrite proxy.
 
-Production builds can run without environment files, but API requests require `NEXT_PUBLIC_BACKEND_URL` to be configured in the deployment platform. Do not put secrets in `NEXT_PUBLIC_*` variables because Next.js includes them in the browser bundle. Environment files are ignored by Git.
+Production defaults to `https://jai-file-transfer-server.vercel.app` when `NEXT_PUBLIC_BACKEND_URL` is not configured. Do not put secrets in `NEXT_PUBLIC_*` variables because Next.js includes them in the browser bundle. Environment files are ignored by Git.
 
 ## Pages
 
