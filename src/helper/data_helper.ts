@@ -11,15 +11,6 @@ export const NAV_ITEMS: NavItem[] = [
   { name: 'Careers',  href: '/careers' },
 ];
 
-/** Storage quota tiers shown in the UI (bytes). */
-export const STORAGE_TIERS = {
-  FREE:  10  * 1024 ** 3,  // 10 GB
-  BASIC: 100 * 1024 ** 3,  // 100 GB
-  PRO:   500 * 1024 ** 3,  // 500 GB
-} as const;
-
-export type StorageTier = keyof typeof STORAGE_TIERS;
-
 /** Upload limits. */
 export const UPLOAD_LIMITS = {
   /** Max size per uploaded file. */

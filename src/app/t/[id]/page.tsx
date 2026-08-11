@@ -8,7 +8,7 @@ import {
   Table2, File, Clock, CheckCircle, XCircle, Eye, EyeOff,
   AlertTriangle, Loader2, Shield, Folder, FolderOpen,
   ChevronDown, ChevronRight, CloudUpload, Send, Sparkles,
-  AlertCircle, X, Copy, Check, User as UserIcon,
+  AlertCircle, X, Check, User as UserIcon,
 } from "lucide-react";
 import { formatBytes, formatDate, getInitials } from "@/lib/utils";
 import { BASE_URL } from "@/lib/api";
@@ -66,9 +66,9 @@ function BrandHeader() {
           src={ImgHelper.logo.jai_logo}
           alt="Jai Export Enterprises company logo"
           width={44}
-          height={44}
+          height={30}
           priority
-          className="h-8 w-8 object-contain sm:h-10 sm:w-10"
+          className="h-auto w-8 object-contain sm:w-10"
         />
       </div>
     </div>
@@ -173,7 +173,7 @@ function filePl(depth: number)   { return FILE_PL[Math.min(depth, FILE_PL.length
    Folder row (recursive)
 ────────────────────────────────────────── */
 function FolderRow({
-  node, depth = 0, password, shortId, unlocked, downloading, onDownload, canDownload,
+  node, depth = 0, password, shortId, unlocked, downloading, downloaded, onDownload, canDownload,
 }: {
   node: FolderNode;
   depth?: number;
@@ -181,11 +181,13 @@ function FolderRow({
   shortId: string;
   unlocked: boolean;
   downloading: string | null;
+  downloaded: ReadonlySet<string>;
   onDownload: (id: string, name: string) => void;
   canDownload: boolean;
 }) {
   const [open, setOpen] = useState(true);
   const [downloadingFolder, setDownloadingFolder] = useState(false);
+  const [downloadedFolder, setDownloadedFolder] = useState(false);
   const subFolders = Object.values(node.children).sort((a, b) => a.name.localeCompare(b.name));
   const totalFiles = countFiles(node);
 
@@ -200,6 +202,7 @@ function FolderRow({
         `${BASE_URL}/transfers/t/${shortId}/download?${params.toString()}`,
         `${node.name}.zip`,
       );
+      setDownloadedFolder(true);
     } finally {
       setTimeout(() => setDownloadingFolder(false), 1500);
     }
@@ -230,11 +233,11 @@ function FolderRow({
             disabled={downloadingFolder}
             onClick={handleFolderDownload}
             title={`Download ${node.name} as ZIP`}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-500 transition-all hover:bg-orange-500 hover:text-white disabled:opacity-60 dark:bg-orange-900/20 dark:hover:bg-orange-500 sm:h-8 sm:w-8"
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-60 sm:h-8 sm:w-8 ${downloadedFolder ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white dark:bg-orange-900/20 dark:hover:bg-orange-500"}`}
           >
             {downloadingFolder
               ? <Loader2 size={12} className="animate-spin" />
-              : <Download size={12} />}
+              : downloadedFolder ? <Check size={14} strokeWidth={3} /> : <Download size={12} />}
           </button>
         )}
       </div>
@@ -250,6 +253,7 @@ function FolderRow({
               shortId={shortId}
               unlocked={unlocked}
               downloading={downloading}
+              downloaded={downloaded}
               onDownload={onDownload}
               canDownload={canDownload}
             />
@@ -260,6 +264,7 @@ function FolderRow({
               file={f}
               depth={depth + 1}
               downloading={downloading}
+              downloaded={downloaded.has(f.id)}
               onDownload={onDownload}
             />
           ))}
@@ -273,11 +278,12 @@ function FolderRow({
    File row
 ────────────────────────────────────────── */
 function FileRow({
-  file, depth = 0, downloading, onDownload,
+  file, depth = 0, downloading, downloaded, onDownload,
 }: {
   file: TransferFile;
   depth?: number;
   downloading: string | null;
+  downloaded: boolean;
   onDownload: (id: string, name: string) => void;
 }) {
   return (
@@ -298,12 +304,12 @@ function FileRow({
         type="button"
         disabled={downloading === file.id}
         onClick={() => onDownload(file.id, file.name)}
-        title={`Download ${file.name}`}
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-orange-50 text-orange-500 transition-all hover:bg-orange-500 hover:text-white disabled:opacity-60 dark:bg-orange-900/20 dark:hover:bg-orange-500 sm:h-8 sm:w-8"
+        title={downloaded ? `${file.name} download started` : `Download ${file.name}`}
+        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-60 sm:h-8 sm:w-8 ${downloaded ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white dark:bg-orange-900/20 dark:hover:bg-orange-500"}`}
       >
         {downloading === file.id
           ? <Loader2 size={14} className="animate-spin" />
-          : <Download size={14} />}
+          : downloaded ? <Check size={15} strokeWidth={3} /> : <Download size={14} />}
       </button>
     </div>
   );
@@ -328,16 +334,11 @@ export default function PublicTransferPage() {
   const [unlocked,  setUnlocked]            = useState(false);
   const [downloading,    setDownloading]    = useState<string | null>(null);
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [downloadedAll,  setDownloadedAll]  = useState(false);
+  const [downloadedFiles, setDownloadedFiles] = useState<Set<string>>(() => new Set());
   const [downloadError,  setDownloadError]  = useState<string | null>(null);
-  const [copied,         setCopied]         = useState(false);
 
   const [mountedAt] = useState(Date.now);
-
-  function handleCopyLink() {
-    navigator.clipboard.writeText(window.location.href).catch(() => null);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
 
   /* ── Initial fetch ── */
   useEffect(() => {
@@ -409,6 +410,8 @@ export default function PublicTransferPage() {
       const url = res.data?.data?.downloadUrl ?? res.data?.downloadUrl ?? res.data?.url;
       if (!url) throw new Error("No download URL returned");
       triggerDownload(url, fileName);
+      setDownloadedFiles((current) => new Set(current).add(fileId));
+      setDownloadError(null);
     } catch {
       setDownloadError("Failed to start download. Please try again.");
     } finally {
@@ -426,6 +429,8 @@ export default function PublicTransferPage() {
       const qs  = params.toString();
       const url = `${BASE_URL}/transfers/t/${shortId}/download${qs ? `?${qs}` : ""}`;
       triggerDownload(url, `${transfer.title ?? "transfer"}.zip`);
+      setDownloadedAll(true);
+      setDownloadError(null);
     } catch {
       for (const f of transfer.files) {
         await handleDownload(f.id, f.name);
@@ -588,18 +593,10 @@ export default function PublicTransferPage() {
                 <CheckCircle size={20} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
                   <h1 className="break-words text-base font-extrabold leading-tight text-gray-900 dark:text-white sm:text-lg">
                     {transfer.subject ?? transfer.title ?? "Files for you"}
                   </h1>
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    title="Copy link to clipboard"
-                    className="flex w-full shrink-0 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold text-gray-600 transition-all hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600 dark:border-zinc-700 dark:bg-zinc-800 dark:text-gray-400 dark:hover:border-orange-800 dark:hover:text-orange-400 sm:w-auto sm:py-1.5"
-                  >
-                    {copied ? <><Check size={12} className="text-emerald-500" /> Copied!</> : <><Copy size={12} /> Copy Link</>}
-                  </button>
                 </div>
 
                 {/* Sender info */}
@@ -666,6 +663,7 @@ export default function PublicTransferPage() {
                 shortId={shortId}
                 unlocked={unlocked}
                 downloading={canDownload ? downloading : null}
+                downloaded={downloadedFiles}
                 onDownload={canDownload ? handleDownload : () => {}}
                 canDownload={canDownload}
               />
@@ -676,6 +674,7 @@ export default function PublicTransferPage() {
                 file={f}
                 depth={0}
                 downloading={canDownload ? downloading : null}
+                downloaded={downloadedFiles.has(f.id)}
                 onDownload={canDownload ? handleDownload : () => {}}
               />
             ))}
@@ -698,20 +697,24 @@ export default function PublicTransferPage() {
             <div className="border-t border-gray-100 px-3 py-3 dark:border-zinc-800 sm:px-5 sm:py-4">
               {transfer.files.length > 1 ? (
                 <button type="button" onClick={handleDownloadAll} disabled={downloadingAll}
-                  className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 py-3 text-center text-sm font-bold text-white shadow-md shadow-orange-500/20 transition-all hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-500/30 disabled:opacity-70 sm:gap-2.5 sm:rounded-2xl sm:text-base">
+                  className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-center text-sm font-bold text-white shadow-md transition-all disabled:opacity-70 sm:gap-2.5 sm:rounded-2xl sm:text-base ${downloadedAll ? "bg-emerald-600 shadow-emerald-500/20 hover:bg-emerald-700" : "bg-orange-500 shadow-orange-500/20 hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-500/30"}`}>
                   {downloadingAll
                     ? <><Loader2 size={16} className="animate-spin" /> Preparing ZIP…</>
-                    : <><Download size={16} /> Download All as ZIP · {formatBytes(transfer.totalSize)}</>}
+                    : downloadedAll
+                      ? <><Check size={17} strokeWidth={3} /> Downloaded</>
+                      : <><Download size={16} /> Download All as ZIP · {formatBytes(transfer.totalSize)}</>}
                 </button>
               ) : (
                 transfer.files[0] && (
                   <button type="button"
                     disabled={downloading === transfer.files[0].id}
                     onClick={() => handleDownload(transfer.files[0].id, transfer.files[0].name)}
-                    className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 px-3 py-3 text-center text-sm font-bold text-white shadow-md shadow-orange-500/20 transition-all hover:bg-orange-600 disabled:opacity-70 sm:gap-2.5 sm:rounded-2xl sm:text-base">
+                    className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-center text-sm font-bold text-white shadow-md transition-all disabled:opacity-70 sm:gap-2.5 sm:rounded-2xl sm:text-base ${downloadedFiles.has(transfer.files[0].id) ? "bg-emerald-600 shadow-emerald-500/20 hover:bg-emerald-700" : "bg-orange-500 shadow-orange-500/20 hover:bg-orange-600"}`}>
                     {downloading === transfer.files[0].id
                       ? <><Loader2 size={16} className="animate-spin" /> Preparing…</>
-                      : <><Download size={16} /> Download · {formatBytes(transfer.files[0].size)}</>}
+                      : downloadedFiles.has(transfer.files[0].id)
+                        ? <><Check size={17} strokeWidth={3} /> Downloaded</>
+                        : <><Download size={16} /> Download · {formatBytes(transfer.files[0].size)}</>}
                   </button>
                 )
               )}

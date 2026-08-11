@@ -45,14 +45,12 @@ import {
   HelpCircle,
   Upload,
   LogOut,
-  AlertTriangle,
   X,
   ChevronDown,
   ChevronRight,
   Plus,
   UserCheck,
   Gauge,
-  PackageCheck,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar } from "@/components/ui";
@@ -205,6 +203,8 @@ const PREFERENCES: NavItem[] = [
 
 const COLLAPSED_KEY = "sidebar:collapsed";
 const SECTIONS_KEY = "sidebar:sections-v2";
+const HIDDEN_SECTION_KEYS = new Set(["storage", "sharing", "categories", "activity"]);
+const HIDDEN_NAV_HREFS = new Set(["/admin/storage", "/admin/activity"]);
 const QUERY_SCOPED_BASES: Record<string, string[]> = {
   "/files": ["type"],
   "/links": ["type"],
@@ -242,17 +242,6 @@ function getActiveSectionKey(
 }
 
 /* ════════════════ SUB-COMPONENTS ════════════════ */
-
-function StorageBar({ pct, gradient }: { pct: number; gradient: string }) {
-  return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800/80">
-      <div
-        style={{ "--pct": pct / 100 } as React.CSSProperties}
-        className={`h-full origin-left rounded-full bg-linear-to-r ${gradient} transform-[scaleX(var(--pct))] transition-[transform] duration-700 ease-out`}
-      />
-    </div>
-  );
-}
 
 function WorkspaceSnapshot({
   usedPct,
@@ -501,7 +490,6 @@ function SectionGroup({
 /* ─── Props ─── */
 interface SidebarProps {
   storageUsed?: number;
-  storageQuota?: number;
   storageLoading?: boolean;
   onUpload?: () => void;
   mobileOpen?: boolean;
@@ -513,7 +501,6 @@ interface SidebarProps {
 ════════════════════════════════════════ */
 function Sidebar({
   storageUsed = 0,
-  storageQuota = 0,
   storageLoading = false,
   onUpload,
   mobileOpen = false,
@@ -657,30 +644,14 @@ function Sidebar({
     return () => window.cancelAnimationFrame(frame);
   }, [activeSectionReady, collapsed, currentSearch, pathname]);
 
-  const usedPct = useMemo(() => {
-    if (!storageQuota || storageQuota <= 0) return 0;
-    return Math.min((storageUsed / storageQuota) * 100, 100);
-  }, [storageUsed, storageQuota]);
-  const hasStorageQuota = storageQuota > 0;
-  const storageAvailable = Math.max(storageQuota - storageUsed, 0);
-  const storageLabel = hasStorageQuota
-    ? `${formatBytes(storageUsed)} / ${formatBytes(storageQuota)}`
-    : `${formatBytes(storageUsed)} used`;
+  const usedPct = 0;
+  const hasStorageQuota = false;
+  const storageAvailable = 0;
+  const storageLabel = `${formatBytes(storageUsed)} used`;
   const storageTitle = storageLoading
     ? "Loading storage usage"
-    : hasStorageQuota
-      ? `${storageLabel} (${usedPct.toFixed(0)}% used)`
-      : storageLabel;
-  const storageIconClass = hasStorageQuota && usedPct >= 90
-    ? "text-red-500"
-    : "text-orange-400";
-
-  const storageGradient =
-    hasStorageQuota && usedPct >= 90
-      ? "from-red-500 to-rose-600"
-      : hasStorageQuota && usedPct >= 75
-        ? "from-amber-500 to-orange-500"
-        : "from-orange-400 via-amber-400 to-yellow-300";
+    : storageLabel;
+  const storageIconClass = "text-orange-400";
 
   const roleBadge = useMemo(
     () =>
@@ -713,7 +684,15 @@ function Sidebar({
   }, [logout]);
 
   const visibleSections = useMemo(
-    () => SECTIONS.filter((s) => !s.minRole || hasRole(role, s.minRole)),
+    () =>
+      SECTIONS.filter(
+        (section) =>
+          !HIDDEN_SECTION_KEYS.has(section.key) &&
+          (!section.minRole || hasRole(role, section.minRole)),
+      ).map((section) => ({
+        ...section,
+        items: section.items.filter((item) => !HIDDEN_NAV_HREFS.has(item.href)),
+      })),
     [role],
   );
 
@@ -760,8 +739,9 @@ function Sidebar({
                   src={ImgHelper.logo.jai_logo}
                   alt="Jai Export Enterprises"
                   width={24}
-                  height={24}
-                  className="h-6 w-6 object-contain"
+                  height={16}
+                  className="h-auto w-6 object-contain"
+                  style={{ height: "auto" }}
                 />
               </div>
               <div className="min-w-0">
@@ -783,8 +763,9 @@ function Sidebar({
                   src={ImgHelper.logo.jai_logo}
                   alt="Jai Export Enterprises"
                   width={24}
-                  height={24}
-                  className="h-6 w-6 object-contain"
+                  height={16}
+                  className="h-auto w-6 object-contain"
+                  style={{ height: "auto" }}
                 />
               </div>
             </Link>
@@ -842,7 +823,7 @@ function Sidebar({
           </Button>
         </div>
 
-        {!collapsed && (
+        {false && !collapsed && (
           <WorkspaceSnapshot
             usedPct={usedPct}
             storageUsed={storageUsed}
@@ -941,7 +922,7 @@ function Sidebar({
         </nav>
 
         {/* ── Storage (expanded) ── */}
-        {!collapsed && (
+        {false && !collapsed && (
           <div className="shrink-0 border-t border-gray-200/70 px-4 py-3.5 dark:border-zinc-800/60">
             <div className="mb-2.5 flex items-center justify-between">
               <div className="flex items-center gap-1.5">
@@ -966,39 +947,10 @@ function Sidebar({
                 </span>
               )}
             </div>
-            <StorageBar
-              pct={storageLoading ? 0 : usedPct}
-              gradient={storageGradient}
-            />
-            {!storageLoading &&
-              (hasStorageQuota && usedPct >= 90 ? (
-                <p className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-red-600 dark:text-red-400">
-                  <AlertTriangle size={9} /> Storage almost full
-                </p>
-              ) : !hasStorageQuota ? (
-                <p className="mt-1.5 text-[10px] text-gray-400 dark:text-gray-500">
-                  No quota set
-                </p>
-              ) : (
-                <div className="mt-1.5 flex items-center justify-between gap-2 text-[10px] text-gray-400 dark:text-gray-500">
-                  <span>{usedPct.toFixed(0)}% used</span>
-                  <span className="inline-flex items-center gap-1 font-medium text-orange-400">
-                    <PackageCheck size={9} />
-                    {formatBytes(storageAvailable)} free
-                  </span>
-                </div>
-              ))}
           </div>
         )}
 
         {/* ── Storage strip (collapsed) ── */}
-        {collapsed && !storageLoading && (
-          <div className="shrink-0 border-t border-gray-200/70 px-3 py-3 dark:border-zinc-800/60">
-            <div title={storageTitle}>
-              <StorageBar pct={usedPct} gradient={storageGradient} />
-            </div>
-          </div>
-        )}
 
         {/* ── User footer ── */}
         <div className="shrink-0 border-t border-gray-200/70 p-3 dark:border-zinc-800/60">
@@ -1020,7 +972,7 @@ function Sidebar({
               className="shrink-0 rounded-full outline-none transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-orange-400/40"
               title={collapsed ? (user?.name ?? "Profile") : undefined}
             >
-              <Avatar name={user?.name ?? "User"} size={34} />
+              <Avatar name={user?.name ?? "User"} src={user?.avatar} size={34} />
             </Link>
             {!collapsed && (
               <>

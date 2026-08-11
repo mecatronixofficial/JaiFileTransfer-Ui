@@ -302,7 +302,7 @@ export default function AnalyticsPage() {
             <div className="rounded-2xl border border-gray-200/70 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="mb-4 flex items-center justify-between">
                 <div>
-                  <h3 className="font-semibold text-gray-900 dark:text-white">Storage Utilization</h3>
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Storage Used</h3>
                   <p className="mt-0.5 text-xs text-gray-400">Cloudflare R2 workspace usage across users</p>
                 </div>
                 <Database size={18} className="text-purple-500" />
@@ -310,25 +310,10 @@ export default function AnalyticsPage() {
               {loading ? (
                 <div className="h-3 animate-pulse rounded-full bg-gray-100 dark:bg-zinc-800" />
               ) : (
-                <>
-                  <div className="mb-2 flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-2xl font-bold text-gray-900 dark:text-white">{formatBytes(p?.totalStorage ?? 0)}</p>
-                      <p className="text-xs text-gray-400">
-                        {project?.storageQuota ? `of ${formatBytes(project.storageQuota)} allocated` : "Quota data not available"}
-                      </p>
-                    </div>
-                    <p className={`text-lg font-extrabold ${project?.storageUsedPct && project.storageUsedPct > 85 ? "text-red-500" : "text-emerald-500"}`}>
-                      {(project?.storageUsedPct ?? 0).toFixed(1)}%
-                    </p>
-                  </div>
-                  <div className="h-2.5 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
-                    <div
-                      className={`h-full rounded-full ${project?.storageUsedPct && project.storageUsedPct > 85 ? "bg-red-500" : "bg-gradient-to-r from-purple-500 to-orange-400"}`}
-                      style={{ width: `${Math.min(project?.storageUsedPct ?? 0, 100)}%` }}
-                    />
-                  </div>
-                </>
+                <div>
+                  <p className="text-3xl font-extrabold text-gray-900 dark:text-white">{formatBytes(p?.totalStorage ?? 0)}</p>
+                  <p className="mt-1 text-xs text-gray-400">Usage tracked without a storage quota</p>
+                </div>
               )}
             </div>
 

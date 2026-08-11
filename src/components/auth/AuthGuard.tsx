@@ -50,13 +50,12 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const redirectingRef = useRef(false);
   const isPublicRoute = useMemo(() => isPathPublic(pathname), [pathname]);
-  const redirectPath = useMemo(
-    () => {
-      if (typeof window === "undefined") return DEFAULT_AUTH_ROUTE;
-      return getSafeRedirect(new URLSearchParams(window.location.search).get("redirect"));
-    },
-    [pathname],
-  );
+  const redirectPath =
+    typeof window === "undefined"
+      ? DEFAULT_AUTH_ROUTE
+      : getSafeRedirect(
+          new URLSearchParams(window.location.search).get("redirect"),
+        );
 
   useEffect(() => {
     redirectingRef.current = false;
@@ -67,7 +66,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
     if (!isAuthenticated && !isPublicRoute) {
       redirectingRef.current = true;
-      router.replace("/");
+      router.replace("/login");
       return;
     }
 

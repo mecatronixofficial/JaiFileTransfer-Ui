@@ -557,11 +557,25 @@ export const usersApi = {
   list: (params?: Record<string, unknown>) =>
     getApi().get("/users", { params }),
 
+  /** Admin: persist drag-and-drop user ordering. */
+  reorder: (userIds: string[]) => getApi().patch("/users/order", { userIds }),
+
   /** Own profile */
   me: () => getApi().get("/users/me"),
 
   /** Update own profile (name/department/phone/avatar only) */
   updateMe: (data: Record<string, unknown>) => getApi().patch("/users/me", data),
+
+  /** Upload the current user's profile photo or banner image. */
+  uploadProfileMedia: (kind: "avatar" | "banner", file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    // Remove the shared JSON content type so the browser adds the required
+    // multipart boundary and Nest's FileInterceptor can read the file field.
+    return getApi().patch(`/users/me/profile-media/${kind}`, formData, {
+      headers: { "Content-Type": undefined },
+    });
+  },
 
   /** Own in-app notification preferences */
   getNotificationPreferences: () =>

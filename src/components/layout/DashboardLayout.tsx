@@ -39,12 +39,6 @@ export function useStorage(): StorageContextValue {
 }
 
 /* =========================
-   CONSTANTS
-========================= */
-
-const DEFAULT_QUOTA = 10_737_418_240; // 10 GiB
-
-/* =========================
    LAYOUT
 ========================= */
 
@@ -57,7 +51,6 @@ export default function DashboardLayout({
   const userId = user?.id ?? user?._id;
 
   const [storageUsed, setStorageUsed]             = useState(0);
-  const [storageQuota, setStorageQuota]           = useState(DEFAULT_QUOTA);
   const [storageLoading, setStorageLoading]       = useState(true);
   const [showUpload, setShowUpload]               = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -90,10 +83,9 @@ export default function DashboardLayout({
         if (!alive) return;
         const storage = readStorageUsage(res.data, {
           used: readStorageUsage(user).used,
-          quota: readStorageUsage(user).quota || DEFAULT_QUOTA,
+          quota: 0,
         });
         setStorageUsed(storage.used);
-        setStorageQuota(storage.quota);
       } catch {
         // silent — layout should never crash over storage
       } finally {
@@ -127,9 +119,9 @@ export default function DashboardLayout({
 
   return (
     <StorageContext.Provider
-      value={{ storageUsed, storageQuota, storageLoading, refreshStorage }}
+      value={{ storageUsed, storageQuota: 0, storageLoading, refreshStorage }}
     >
-      <div className="flex min-h-screen bg-(--bg)">
+      <div className="flex h-screen overflow-hidden bg-(--bg)">
 
         {/* ── Mobile overlay (closes sidebar on backdrop click) ── */}
         {mobileSidebarOpen && (
@@ -142,22 +134,20 @@ export default function DashboardLayout({
 
         <Sidebar
           storageUsed={storageUsed}
-          storageQuota={storageQuota}
           storageLoading={storageLoading}
           onUpload={() => setShowUpload(true)}
           mobileOpen={mobileSidebarOpen}
           onMobileClose={() => setMobileSidebarOpen(false)}
         />
 
-        <div className="flex min-w-0 flex-1 flex-col">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           <Header
             onMobileSidebarOpen={() => setMobileSidebarOpen(true)}
             onUpload={() => setShowUpload(true)}
             storageUsed={storageUsed}
-            storageQuota={storageQuota}
             storageLoading={storageLoading}
           />
-          <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-7">
+          <main className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-7">
             {children}
           </main>
         </div>

@@ -10,6 +10,9 @@
 
 @import "tailwindcss";
 
+/* Keep dark utilities opt-in so the operating system cannot activate them. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* Jai Export Enterprises brand palette — shared by every orange/amber utility */
 @theme {
   --color-orange-50: #fff9e6;
@@ -43,6 +46,8 @@
 
 @layer base {
   :root {
+    color-scheme: light;
+
     /* Backgrounds */
     --bg: #ffffff;
     --bg-2: #fafafa;

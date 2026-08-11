@@ -191,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ========================= */
   const logout = useCallback(
     async (options: LogoutOptions = {}): Promise<void> => {
-      const { redirectTo = "/", silent = false } = options;
+      const { redirectTo = "/login", silent = false } = options;
 
       // Clear UI immediately — don't wait on the network for the user
       // to feel "logged out". Avoids the dashboard flashing stale data

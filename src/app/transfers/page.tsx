@@ -5,10 +5,9 @@ import Link from "next/link";
 import {
   Send, Eye, Download, Clock, CheckCircle, XCircle, Search,
   ArrowUpRight, MoreHorizontal, Link as LinkIcon, Copy,
-  Check, Trash2, RefreshCw, Users, Shield, Lock,
-  Star, Inbox, TrendingUp, X, Mail, QrCode,
-  Zap, ExternalLink, ToggleLeft, ToggleRight,
-  CloudUpload, Sparkles,
+  Check, Trash2, RefreshCw, Users, Lock,
+  Star, Inbox, X, Mail, QrCode,
+  ExternalLink, ToggleLeft, ToggleRight,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import AuthGuard from "@/components/auth/AuthGuard";
@@ -33,15 +32,6 @@ import { Transfer } from "@/types";
 ────────────────────────────────────────── */
 type ViewTab    = "sent" | "received" | "starred";
 type StatusFilter = "all" | "active" | "expired" | "disabled";
-
-interface TransferStats {
-  totalTransfers: number;
-  selfTransfers:  number;
-  totalUsers:     number;
-  receivedMails:  number;
-  starredMails:   number;
-  activeLinks:    number;
-}
 
 /* ──────────────────────────────────────────
    Method icon helper
@@ -94,27 +84,6 @@ function SkeletonRow() {
   );
 }
 
-/* ──────────────────────────────────────────
-   Stat card
-────────────────────────────────────────── */
-function StatCard({ label, value, icon, gradient, loading }: {
-  label: string; value: number; icon: React.ReactNode; gradient: string; loading: boolean;
-}) {
-  return (
-    <div className="group relative overflow-hidden rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md dark:border-zinc-800/80 dark:bg-zinc-900">
-      <div className="pointer-events-none absolute right-0 top-0 h-16 w-16 translate-x-5 -translate-y-5 rounded-full bg-gray-50 dark:bg-zinc-800/40" />
-      <div className={`relative mb-2.5 flex h-8 w-8 items-center justify-center rounded-lg bg-linear-to-br ${gradient} text-white shadow-sm`}>
-        {icon}
-      </div>
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-(--text-muted)">{label}</p>
-      {loading
-        ? <div className="mt-1 h-5 w-10 animate-pulse rounded-md bg-gray-100 dark:bg-zinc-800" />
-        : <p className="mt-0.5 text-lg font-bold text-(--text)">{value.toLocaleString()}</p>}
-      <TrendingUp size={10} className="absolute bottom-3 right-3 text-gray-200 dark:text-zinc-700" />
-    </div>
-  );
-}
-
 /* ══════════════════════════════════════════
    PAGE
 ══════════════════════════════════════════ */
@@ -122,11 +91,6 @@ export default function TransfersPage() {
   const [viewTab, setViewTab]           = useState<ViewTab>("sent");
   const [transfers, setTransfers]       = useState<Transfer[]>([]);
   const [loading, setLoading]           = useState(true);
-  const [statsLoading, setStatsLoading] = useState(true);
-  const [stats, setStats] = useState<TransferStats>({
-    totalTransfers: 0, selfTransfers: 0, totalUsers: 0,
-    receivedMails: 0, starredMails: 0, activeLinks: 0,
-  });
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch]             = useState("");
   const [copiedId, setCopiedId]         = useState<string | null>(null);
@@ -145,23 +109,6 @@ export default function TransfersPage() {
     document.addEventListener("mousedown", fn);
     return () => document.removeEventListener("mousedown", fn);
   }, [menuOpen]);
-
-  /* ── Load stats ── */
-  const loadStats = useCallback(async () => {
-    try {
-      setStatsLoading(true);
-      const res = await transfersApi.getStats();
-      const d   = res.data?.data ?? res.data ?? {};
-      setStats({
-        totalTransfers: d.totalTransfers ?? 0,
-        selfTransfers:  d.selfTransfers  ?? 0,
-        totalUsers:     d.totalUsers     ?? 0,
-        receivedMails:  d.receivedMails  ?? 0,
-        starredMails:   d.starredMails   ?? 0,
-        activeLinks:    d.activeLinks    ?? 0,
-      });
-    } catch { /* silently ignore */ } finally { setStatsLoading(false); }
-  }, []);
 
   /* ── Load transfers by tab ── */
   const load = useCallback(async (tab: ViewTab = "sent") => {
@@ -186,16 +133,17 @@ export default function TransfersPage() {
     }
   }, []);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
-  useEffect(() => { load(viewTab); }, [load, viewTab]);
+  useEffect(() => {
+    const timer = window.setTimeout(() => void load(viewTab), 0);
+    return () => window.clearTimeout(timer);
+  }, [load, viewTab]);
   useEffect(() => {
     return listenAppDataChanged((detail) => {
       if (detail.transfers || detail.files || detail.folders || detail.storage) {
-        void loadStats();
         void load(viewTab);
       }
     });
-  }, [load, loadStats, viewTab]);
+  }, [load, viewTab]);
 
   /* ── Filtered list ── */
   const filtered = useMemo(() => {
@@ -324,13 +272,6 @@ export default function TransfersPage() {
     { value: "disabled", label: "Disabled" },
   ];
 
-  const STAT_CARDS = [
-    { label: "Total Sent",  value: stats.totalTransfers, icon: <Send size={15} />,       gradient: "from-orange-500 to-amber-500"  },
-    { label: "Received",    value: stats.receivedMails,  icon: <Inbox size={15} />,      gradient: "from-blue-500 to-blue-600"     },
-    { label: "Active Links",value: stats.activeLinks,    icon: <LinkIcon size={15} />,   gradient: "from-emerald-500 to-green-600" },
-    { label: "Starred",     value: stats.starredMails,   icon: <Star size={15} />,       gradient: "from-amber-500 to-yellow-500"  },
-  ];
-
   /* ══════════════════════════════════════════
      RENDER
   ══════════════════════════════════════════ */
@@ -338,58 +279,6 @@ export default function TransfersPage() {
     <AuthGuard>
       <DashboardLayout>
         <div className="animate-fade-in space-y-5 pb-14">
-
-          {/* ── Hero ── */}
-          <div className="relative overflow-hidden rounded-2xl border border-orange-200/50 bg-linear-to-br from-orange-50 via-amber-50/40 to-white px-6 py-6 dark:border-orange-900/20 dark:from-orange-950/25 dark:via-amber-900/10 dark:to-zinc-900/0">
-            <div className="pointer-events-none absolute -right-12 -top-12 h-48 w-48 rounded-full bg-orange-400/10 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-8 left-16 h-32 w-32 rounded-full bg-amber-400/8 blur-2xl" />
-
-            <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-4">
-                <div className="relative flex h-13 w-13 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-500/25">
-                  <Send size={22} />
-                  <div className="absolute -right-1 -top-1 flex h-4.5 w-4.5 items-center justify-center rounded-full bg-white shadow-sm dark:bg-zinc-900">
-                    <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-xl font-extrabold tracking-tight text-(--text)">Transfers</h1>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-500/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-600 dark:text-orange-400">
-                      <Sparkles size={9} /> R2 Powered
-                    </span>
-                  </div>
-                  <p className="mt-0.5 text-sm text-(--text-muted)">Manage your sent, received and starred file transfers</p>
-                  <div className="mt-1.5 flex items-center gap-3">
-                    <span className="flex items-center gap-1 text-[11px] text-(--text-muted)"><CloudUpload size={10} className="text-sky-500" /> Cloudflare R2</span>
-                    <span className="h-3 w-px bg-gray-200 dark:bg-zinc-700" />
-                    <span className="flex items-center gap-1 text-[11px] text-(--text-muted)"><Shield size={10} className="text-emerald-500" /> Encrypted</span>
-                    <span className="h-3 w-px bg-gray-200 dark:bg-zinc-700" />
-                    <span className="flex items-center gap-1 text-[11px] text-(--text-muted)"><Zap size={10} className="text-amber-500" /> Fast delivery</span>
-                  </div>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <button type="button" onClick={() => load(viewTab)}
-                  disabled={loading}
-                  className="flex items-center gap-1.5 rounded-xl border border-gray-200/80 bg-white/80 px-3.5 py-2 text-xs font-semibold text-(--text-muted) shadow-sm backdrop-blur-sm transition-colors hover:text-(--text) disabled:opacity-50 dark:border-zinc-700/60 dark:bg-zinc-900/80">
-                  <RefreshCw size={12} className={loading ? "animate-spin" : ""} /> Refresh
-                </button>
-                <Link href="/transfers/send">
-                  <Button leftIcon={<Send size={14} />} size="sm" rounded="xl">
-                    New Transfer
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Stats ── */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {STAT_CARDS.map((s) => (
-              <StatCard key={s.label} {...s} loading={statsLoading} />
-            ))}
-          </div>
 
           {/* ── View tabs ── */}
           <div className="flex items-center gap-1 rounded-2xl border border-gray-200/70 bg-gray-50 p-1 dark:border-zinc-800 dark:bg-zinc-900/60 w-fit">
@@ -766,7 +655,7 @@ export default function TransfersPage() {
                     <p className="text-xs text-(--text-muted)">
                       Showing <span className="font-semibold text-(--text)">{filtered.length}</span> of{" "}
                       <span className="font-semibold text-(--text)">{transfers.length}</span> transfers
-                      {search && <> matching <span className="font-semibold text-orange-500">"{search}"</span></>}
+                      {search && <> matching <span className="font-semibold text-orange-500">&ldquo;{search}&rdquo;</span></>}
                     </p>
                   </div>
                 )}

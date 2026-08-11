@@ -6,6 +6,7 @@ import {
   UserCheck, HardDrive, RefreshCw, X, Ban, Power, PowerOff, Save,
   Pencil, ChevronDown, ChevronLeft, ChevronRight as ChevronRightIcon,
   AlertTriangle, Mail, Phone, Building2, Calendar, DatabaseZap,
+  GripVertical, ArrowUpToLine, ArrowDownToLine,
 } from "lucide-react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import AuthGuard from "@/components/auth/AuthGuard";
@@ -131,18 +132,15 @@ interface DrawerProps {
   onSaveEdit: (id: string, data: Partial<EditForm>) => Promise<void>;
   onToggleActive: (user: User) => Promise<void>;
   onDelete: (id: string, name: string) => void;
-  onOpenQuota: (user: User) => void;
   onSyncStorage: (user: User) => Promise<void>;
   syncingUser: string | null;
 }
 
 function UserDrawer({
   user, isSuperAdmin, isCurrentUser, onClose,
-  onSaveEdit, onToggleActive, onDelete, onOpenQuota, onSyncStorage, syncingUser,
+  onSaveEdit, onToggleActive, onDelete, onSyncStorage, syncingUser,
 }: DrawerProps) {
   const rc = ROLE_CONFIG[user.role];
-  const storagePct = user.storageQuota > 0
-    ? Math.min((user.storageUsed / user.storageQuota) * 100, 100) : 0;
 
   const [editing,  setEditing]  = useState(false);
   const [saving,   setSaving]   = useState(false);
@@ -197,7 +195,7 @@ function UserDrawer({
 
           {/* Identity */}
           <div className="flex items-center gap-4">
-            <Avatar name={user.name} size={56} />
+            <Avatar name={user.name} src={user.avatar} size={56} />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-lg font-bold text-gray-900 dark:text-white">{user.name}</p>
@@ -255,19 +253,12 @@ function UserDrawer({
             <>
               {/* Storage */}
               <div className="rounded-xl bg-gray-50 p-4 dark:bg-zinc-800/50">
-                <div className="mb-2 flex items-center justify-between">
+                <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Storage usage</span>
-                  <span className="text-xs text-gray-700 dark:text-gray-300">
-                    {formatBytes(user.storageUsed)} / {formatBytes(user.storageQuota)}
+                  <span className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                    {formatBytes(user.storageUsed)} used
                   </span>
                 </div>
-                <div className="h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-zinc-700">
-                  <div
-                    className={`h-full origin-left rounded-full transition-transform duration-500 ${storagePct >= 90 ? "bg-red-500" : storagePct >= 75 ? "bg-amber-500" : "bg-orange-500"}`}
-                    style={{ transform: `scaleX(${(storagePct / 100).toFixed(4)})` }}
-                  />
-                </div>
-                <p className="mt-1 text-xs text-gray-400">{storagePct.toFixed(0)}% used</p>
               </div>
 
               {/* Meta */}
@@ -291,9 +282,6 @@ function UserDrawer({
 
               {/* Actions */}
               <div className="space-y-2 pt-1">
-                <Button fullWidth variant="secondary" leftIcon={<HardDrive size={13} />} onClick={() => onOpenQuota(user)}>
-                  Update storage quota
-                </Button>
                 <Button
                   fullWidth
                   variant="secondary"
@@ -353,13 +341,12 @@ export default function AdminUsersPage() {
   const [page,        setPage]        = useState(1);
   const [selected,    setSelected]    = useState<User | null>(null);
   const [showCreate,  setShowCreate]  = useState(false);
-  const [showQuota,   setShowQuota]   = useState(false);
-  const [quotaUser,   setQuotaUser]   = useState<User | null>(null);
-  const [quotaGB,     setQuotaGB]     = useState("10");
   const [creating,    setCreating]    = useState(false);
   const [deleteTarget,setDeleteTarget]= useState<{ id: string; name: string } | null>(null);
   const [deleting,    setDeleting]    = useState(false);
   const [syncingUser, setSyncingUser] = useState<string | null>(null);
+  const [draggedUserId, setDraggedUserId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "user" });
 
   useEffect(() => {
@@ -470,24 +457,6 @@ export default function AdminUsersPage() {
     finally { setDeleting(false); }
   }
 
-  /* ─── Quota ─── */
-  async function updateQuota(e: { preventDefault(): void }) {
-    e.preventDefault();
-    if (!quotaUser) return;
-    const bytes = parseFloat(quotaGB) * 1_073_741_824;
-    if (isNaN(bytes) || bytes <= 0) return showToast.error("Enter a valid quota in GB");
-    setCreating(true);
-    try {
-      await usersApi.updateQuota(quotaUser.id, bytes);
-      showToast.success("Quota updated");
-      setShowQuota(false);
-      setAllUsers((prev) => prev.map((u) => (u.id === quotaUser.id ? { ...u, storageQuota: bytes } : u)));
-      setSelected((prev) => prev?.id === quotaUser.id ? { ...prev, storageQuota: bytes } : prev);
-      load(true);
-    } catch (err) { handleApiError(err); }
-    finally { setCreating(false); }
-  }
-
   async function syncStorage(user: User) {
     setSyncingUser(user.id);
     try {
@@ -504,7 +473,53 @@ export default function AdminUsersPage() {
     }
   }
 
+  async function persistUserOrder(nextUsers: User[], previousUsers: User[]) {
+    setAllUsers(nextUsers);
+    setReordering(true);
+    try {
+      await usersApi.reorder(nextUsers.map((user) => user.id));
+      showToast.success("User order updated");
+    } catch (error) {
+      setAllUsers(previousUsers);
+      handleApiError(error);
+    } finally {
+      setReordering(false);
+      setDraggedUserId(null);
+    }
+  }
+
+  function moveUserToEdge(userId: string, edge: "top" | "bottom") {
+    if (reordering) return;
+    const previous = [...allUsers];
+    const user = previous.find((item) => item.id === userId);
+    if (!user) return;
+    const remaining = previous.filter((item) => item.id !== userId);
+    const next = edge === "top" ? [user, ...remaining] : [...remaining, user];
+    void persistUserOrder(next, previous);
+  }
+
+  function dropUserOn(targetUserId: string) {
+    if (!draggedUserId || draggedUserId === targetUserId || reordering) {
+      setDraggedUserId(null);
+      return;
+    }
+
+    const previous = [...allUsers];
+    const fromIndex = previous.findIndex((user) => user.id === draggedUserId);
+    const targetIndex = previous.findIndex((user) => user.id === targetUserId);
+    if (fromIndex < 0 || targetIndex < 0) {
+      setDraggedUserId(null);
+      return;
+    }
+
+    const next = [...previous];
+    const [moved] = next.splice(fromIndex, 1);
+    next.splice(targetIndex, 0, moved);
+    void persistUserOrder(next, previous);
+  }
+
   /* ─── Filtered + paginated ─── */
+  const canReorder = !search.trim() && roleFilter === "all" && statusFilter === "all";
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
     return allUsers.filter((u) => {
@@ -545,23 +560,43 @@ export default function AdminUsersPage() {
         <div className="space-y-6 py-2">
 
           {/* ── Header ── */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 ring-1 ring-orange-200 dark:ring-orange-800/30">
-                <Users size={18} className="text-orange-500" />
+          <section className="relative overflow-hidden rounded-3xl bg-[#fcaa01] p-5 shadow-xl shadow-[#fcaa01]/15 sm:p-7">
+            <div className="pointer-events-none absolute -right-14 -top-20 h-64 w-64 rounded-full border-[30px] border-white/15" />
+            <div className="pointer-events-none absolute -bottom-16 left-1/3 h-40 w-40 rounded-full border border-white/30" />
+            <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-4">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[rgb(73,140,1)] text-white shadow-lg shadow-green-800/20">
+                  <Users size={22} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold uppercase tracking-[0.16em] text-[rgb(62,120,1)]">Administration</p>
+                  <h1 className="mt-0.5 text-2xl font-extrabold tracking-tight text-gray-950 sm:text-3xl">User Manager</h1>
+                  <p className="mt-1 text-sm font-medium text-gray-800">
+                    {loading ? "Loading user accounts…" : `${allUsers.length} total accounts · ${allUsers.filter((u) => u.isActive).length} active`}
+                  </p>
+                </div>
               </div>
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">User Manager</h1>
-                <p className="text-xs text-gray-400 dark:text-gray-500">
-                  {loading ? "Loading…" : `${allUsers.length} total · ${allUsers.filter((u) => u.isActive).length} active`}
-                </p>
+              <div className="flex w-full gap-2 sm:w-auto">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<RefreshCw size={13} />}
+                  onClick={() => load()}
+                  className="flex-1 !border-white/70 !bg-white/90 !text-gray-800 hover:!bg-white sm:flex-none"
+                >
+                  Refresh
+                </Button>
+                <Button
+                  size="sm"
+                  leftIcon={<Plus size={15} />}
+                  onClick={() => setShowCreate(true)}
+                  className="flex-1 !border-[rgb(62,120,1)]/40 !from-[rgb(73,140,1)] !via-[rgb(73,140,1)] !to-[rgb(62,120,1)] !shadow-green-800/20 sm:flex-none"
+                >
+                  New User
+                </Button>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Button variant="secondary" size="sm" leftIcon={<RefreshCw size={13} />} onClick={() => load()}>Refresh</Button>
-              <Button leftIcon={<Plus size={15} />} onClick={() => setShowCreate(true)}>New User</Button>
-            </div>
-          </div>
+          </section>
 
           {/* ── Error banner ── */}
           {fetchError && !loading && allUsers.length === 0 && (
@@ -599,15 +634,15 @@ export default function AdminUsersPage() {
                 Storage Used
               </div>
               <p className="mt-2 text-xs text-gray-500">
-                {formatBytes(adminStats?.storage?.totalUsedBytes ?? derivedStats.totalUsed)} of {formatBytes(adminStats?.storage?.totalQuotaBytes ?? derivedStats.totalQuota)}
+                {formatBytes(adminStats?.storage?.totalUsedBytes ?? derivedStats.totalUsed)} used
               </p>
             </div>
             <div className="rounded-2xl border border-gray-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
                 <AlertTriangle size={15} className="text-amber-500" />
-                High Usage
+                Storage Tracking
               </div>
-              <p className="mt-2 text-xs text-gray-500">{derivedStats.highUsage} users at or above 80% quota</p>
+              <p className="mt-2 text-xs text-gray-500">Usage is tracked without a storage limit</p>
             </div>
             <div className="rounded-2xl border border-gray-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
               <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
@@ -619,14 +654,14 @@ export default function AdminUsersPage() {
           </div>
 
           {/* ── Filters ── */}
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex flex-col gap-3 rounded-2xl border border-gray-200/80 bg-white p-3 shadow-sm sm:flex-row dark:border-zinc-800 dark:bg-zinc-900">
             <div className="relative flex-1">
               <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search by name or email…"
-                className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-9 pr-4 text-sm text-gray-900 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white"
+                className="w-full rounded-xl border border-gray-200 bg-gray-50/70 py-2.5 pl-9 pr-4 text-sm text-gray-900 focus:border-[rgb(73,140,1)] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[rgb(73,140,1)]/15 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -634,7 +669,7 @@ export default function AdminUsersPage() {
                 <button key={r} type="button" onClick={() => setRoleFilter(r)}
                   className={`rounded-xl border px-3 py-2 text-xs font-medium capitalize transition-colors ${
                     roleFilter === r
-                      ? "border-orange-300 bg-orange-50 text-orange-700 dark:border-orange-700 dark:bg-orange-950/20 dark:text-orange-400"
+                      ? "border-[rgb(73,140,1)]/40 bg-green-50 text-[rgb(62,120,1)] dark:border-green-700 dark:bg-green-950/20 dark:text-green-400"
                       : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-gray-400"
                   }`}>
                   {r === "superadmin" ? "Superadmin" : r}
@@ -643,7 +678,7 @@ export default function AdminUsersPage() {
               <button type="button" onClick={() => setStatusFilter(statusFilter === "active" ? "all" : "active")}
                 className={`rounded-xl border px-3 py-2 text-xs font-medium transition-colors ${
                   statusFilter === "active"
-                    ? "border-green-300 bg-green-50 text-green-700 dark:border-green-700 dark:bg-green-950/20 dark:text-green-400"
+                    ? "border-[rgb(73,140,1)]/40 bg-green-50 text-[rgb(62,120,1)] dark:border-green-700 dark:bg-green-950/20 dark:text-green-400"
                     : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 dark:border-zinc-700 dark:bg-zinc-900 dark:text-gray-400"
                 }`}>
                 Active only
@@ -651,13 +686,112 @@ export default function AdminUsersPage() {
             </div>
           </div>
 
+          {!canReorder && (
+            <p className="-mt-3 text-xs text-gray-400">
+              Clear search and filters to drag users into a custom order.
+            </p>
+          )}
+
           {/* ── Table ── */}
           <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-            <div className="overflow-x-auto">
+            {/* Mobile user cards */}
+            <div className="divide-y divide-gray-100 lg:hidden dark:divide-zinc-800">
+              {loading ? (
+                Array.from({ length: 5 }).map((_, index) => (
+                  <div key={index} className="space-y-3 p-4">
+                    <div className="h-11 animate-pulse rounded-xl bg-gray-100 dark:bg-zinc-800" />
+                    <div className="h-9 animate-pulse rounded-xl bg-gray-50 dark:bg-zinc-800/60" />
+                  </div>
+                ))
+              ) : pageUsers.length === 0 ? (
+                <div className="py-12 text-center text-gray-400">
+                  <Users size={32} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">{search ? "No users match your search" : "No users yet"}</p>
+                </div>
+              ) : (
+                pageUsers.map((user) => {
+                  const rc = ROLE_CONFIG[user.role];
+                  return (
+                    <article key={user.id} className="space-y-4 p-4">
+                      <div className="flex min-w-0 items-start justify-between gap-3">
+                        <button type="button" onClick={() => setSelected(user)} className="flex min-w-0 items-center gap-3 text-left">
+                          <Avatar name={user.name} src={user.avatar} size={42} />
+                          <span className="min-w-0">
+                            <span className="flex items-center gap-1.5">
+                              <span className="truncate text-sm font-bold text-gray-900 dark:text-white">{user.name}</span>
+                              {user.isEmailVerified && <CheckCircle2 size={12} className="shrink-0 text-[rgb(73,140,1)]" />}
+                            </span>
+                            <span className="block truncate text-xs text-gray-400">{user.email}</span>
+                          </span>
+                        </button>
+                        <span className={`inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ring-1 ${rc.badge}`}>
+                          {rc.icon} {rc.label}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-3 gap-2 rounded-xl bg-gray-50 p-3 dark:bg-zinc-800/60">
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Status</p>
+                          <p className={`mt-1 text-xs font-semibold ${user.isActive ? "text-[rgb(62,120,1)]" : "text-gray-500"}`}>
+                            {user.isActive ? "Active" : "Inactive"}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Storage</p>
+                          <p className="mt-1 truncate text-xs font-semibold text-gray-700 dark:text-gray-300">{formatBytes(user.storageUsed)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[9px] font-bold uppercase tracking-wide text-gray-400">Last active</p>
+                          <p className="mt-1 truncate text-xs font-semibold text-gray-700 dark:text-gray-300">{formatRelative(user.lastLoginAt)}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {canReorder && (
+                          <>
+                            <button type="button" onClick={() => moveUserToEdge(user.id, "top")} disabled={reordering || allUsers[0]?.id === user.id}
+                              className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2.5 text-[11px] font-semibold text-gray-500 disabled:opacity-30 dark:border-zinc-700">
+                              <ArrowUpToLine size={12} /> Top
+                            </button>
+                            <button type="button" onClick={() => moveUserToEdge(user.id, "bottom")} disabled={reordering || allUsers.at(-1)?.id === user.id}
+                              className="flex h-8 items-center gap-1 rounded-lg border border-gray-200 px-2.5 text-[11px] font-semibold text-gray-500 disabled:opacity-30 dark:border-zinc-700">
+                              <ArrowDownToLine size={12} /> Bottom
+                            </button>
+                          </>
+                        )}
+                        <button type="button" onClick={() => setSelected(user)}
+                          className="flex h-8 items-center gap-1 rounded-lg bg-green-50 px-2.5 text-[11px] font-semibold text-[rgb(62,120,1)]">
+                          <Pencil size={12} /> Details
+                        </button>
+                        <button type="button" onClick={() => void syncStorage(user)} disabled={syncingUser === user.id}
+                          className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-blue-50 hover:text-blue-500 disabled:opacity-50" aria-label={`Sync ${user.name} storage`}>
+                          <RefreshCw size={13} className={syncingUser === user.id ? "animate-spin" : ""} />
+                        </button>
+                        {user.id !== me?.id && (
+                          <button type="button" onClick={() => void toggleActive(user)}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-amber-50 hover:text-amber-500" aria-label={`${user.isActive ? "Deactivate" : "Activate"} ${user.name}`}>
+                            {user.isActive ? <PowerOff size={13} /> : <Power size={13} />}
+                          </button>
+                        )}
+                        {isSuperAdmin && user.id !== me?.id && (
+                          <button type="button" onClick={() => setDeleteTarget({ id: user.id, name: user.name })}
+                            className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500" aria-label={`Delete ${user.name}`}>
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </article>
+                  );
+                })
+              )}
+            </div>
+
+            {/* Desktop table */}
+            <div className="hidden overflow-x-auto lg:block">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-100 dark:border-zinc-800 bg-gray-50/60 dark:bg-zinc-900/50">
-                    {["User", "Role", "Status", "Last Active", "Storage", "Quota", "Actions"].map((h) => (
+                    {["Order", "User", "Role", "Status", "Last Active", "Storage Used", "Actions"].map((h) => (
                       <th key={h} scope="col" className="px-4 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">{h}</th>
                     ))}
                   </tr>
@@ -666,7 +800,7 @@ export default function AdminUsersPage() {
                   {loading
                     ? Array.from({ length: 8 }).map((_, i) => (
                         <tr key={i}>
-                          {[160, 80, 70, 90, 80, 70, 60].map((_, j) => (
+                          {[28, 160, 80, 70, 90, 80, 120].map((_, j) => (
                             <td key={j} className="px-4 py-3">
                               <div className="h-4 w-20 animate-pulse rounded bg-gray-100 dark:bg-zinc-800" />
                             </td>
@@ -675,13 +809,41 @@ export default function AdminUsersPage() {
                       ))
                     : pageUsers.map((user) => {
                         const rc  = ROLE_CONFIG[user.role];
-                        const pct = user.storageQuota > 0
-                          ? Math.min((user.storageUsed / user.storageQuota) * 100, 100) : 0;
                         return (
-                          <tr key={user.id} className="group transition-colors hover:bg-gray-50/50 dark:hover:bg-zinc-800/20">
+                          <tr
+                            key={user.id}
+                            onDragOver={(event) => {
+                              if (!canReorder) return;
+                              event.preventDefault();
+                              event.dataTransfer.dropEffect = "move";
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              if (canReorder) dropUserOn(user.id);
+                            }}
+                            className={`group transition-colors hover:bg-gray-50/50 dark:hover:bg-zinc-800/20 ${draggedUserId === user.id ? "bg-orange-50/70 opacity-60 dark:bg-orange-950/20" : ""}`}
+                          >
+                            <td className="px-3 py-3">
+                              <button
+                                type="button"
+                                draggable={canReorder && !reordering}
+                                disabled={!canReorder || reordering}
+                                onDragStart={(event) => {
+                                  setDraggedUserId(user.id);
+                                  event.dataTransfer.effectAllowed = "move";
+                                  event.dataTransfer.setData("text/plain", user.id);
+                                }}
+                                onDragEnd={() => setDraggedUserId(null)}
+                                aria-label={`Drag ${user.name} to reorder`}
+                                title={canReorder ? "Drag to reorder" : "Clear filters to reorder"}
+                                className="flex h-8 w-8 cursor-grab items-center justify-center rounded-lg text-gray-300 transition hover:bg-gray-100 hover:text-gray-600 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-35 dark:hover:bg-zinc-800 dark:hover:text-gray-300"
+                              >
+                                <GripVertical size={15} />
+                              </button>
+                            </td>
                             <td className="px-4 py-3">
                               <button type="button" onClick={() => setSelected(user)} className="flex items-center gap-3 text-left">
-                                <Avatar name={user.name} size={36} />
+                                <Avatar name={user.name} src={user.avatar} size={36} />
                                 <div>
                                   <div className="flex items-center gap-1.5">
                                     <p className="text-sm font-medium text-gray-900 hover:text-orange-500 dark:text-white">{user.name}</p>
@@ -710,24 +872,24 @@ export default function AdminUsersPage() {
                               {formatRelative(user.lastLoginAt)}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="w-24">
-                                <div className="mb-1 flex items-center justify-between">
-                                  <span className="text-[10px] text-gray-400">{pct.toFixed(0)}%</span>
-                                  <span className="text-[10px] text-gray-400">{formatBytes(user.storageUsed)}</span>
-                                </div>
-                                <div className="h-1 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
-                                  <div
-                                    className={`h-full origin-left rounded-full ${pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-orange-500"}`}
-                                    style={{ transform: `scaleX(${(pct / 100).toFixed(4)})` }}
-                                  />
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
-                              {formatBytes(user.storageQuota)}
+                              <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{formatBytes(user.storageUsed)}</span>
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                              <div className="flex min-w-max items-center gap-1">
+                                {canReorder && (
+                                  <>
+                                    <button type="button" onClick={() => moveUserToEdge(user.id, "top")} disabled={reordering || allUsers[0]?.id === user.id}
+                                      title="Move to top"
+                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-green-50 hover:text-[rgb(73,140,1)] disabled:opacity-30 dark:hover:bg-green-950/20">
+                                      <ArrowUpToLine size={13} />
+                                    </button>
+                                    <button type="button" onClick={() => moveUserToEdge(user.id, "bottom")} disabled={reordering || allUsers.at(-1)?.id === user.id}
+                                      title="Move to bottom"
+                                      className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-green-50 hover:text-[rgb(73,140,1)] disabled:opacity-30 dark:hover:bg-green-950/20">
+                                      <ArrowDownToLine size={13} />
+                                    </button>
+                                  </>
+                                )}
                                 <button type="button" onClick={() => setSelected(user)} title="View details"
                                   className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-zinc-800">
                                   <Eye size={13} />
@@ -735,12 +897,6 @@ export default function AdminUsersPage() {
                                 <button type="button" onClick={() => setSelected(user)} title="Edit user"
                                   className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-orange-50 hover:text-orange-500 dark:hover:bg-orange-950/20">
                                   <Pencil size={13} />
-                                </button>
-                                <button type="button"
-                                  onClick={() => { setQuotaUser(user); setQuotaGB(String(Math.round((user.storageQuota || 10_737_418_240) / 1_073_741_824))); setShowQuota(true); }}
-                                  title="Update quota"
-                                  className="flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-zinc-800">
-                                  <HardDrive size={13} />
                                 </button>
                                 <button type="button" onClick={() => syncStorage(user)} disabled={syncingUser === user.id}
                                   title="Sync storage"
@@ -784,11 +940,11 @@ export default function AdminUsersPage() {
 
             {/* ── Pagination ── */}
             {!loading && filtered.length > PAGE_SIZE && (
-              <div className="flex items-center justify-between border-t border-gray-100 px-5 py-3.5 dark:border-zinc-800">
+              <div className="flex flex-col gap-3 border-t border-gray-100 px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between sm:px-5 dark:border-zinc-800">
                 <p className="text-xs text-gray-500 dark:text-gray-400">
                   Showing {(safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, filtered.length)} of {filtered.length}
                 </p>
-                <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button type="button" aria-label="Previous page" disabled={safePage === 1} onClick={() => setPage((p) => p - 1)}
                     className="flex h-7 w-7 items-center justify-center rounded-lg border border-gray-200 text-gray-400 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-500 disabled:opacity-40 dark:border-zinc-700 dark:hover:border-orange-700 dark:hover:bg-orange-950/20 dark:hover:text-orange-400">
                     <ChevronLeft size={14} />
@@ -828,7 +984,6 @@ export default function AdminUsersPage() {
             onSaveEdit={saveEdit}
             onToggleActive={toggleActive}
             onDelete={(id, name) => setDeleteTarget({ id, name })}
-            onOpenQuota={(u) => { setQuotaUser(u); setQuotaGB(String(Math.round((u.storageQuota || 10_737_418_240) / 1_073_741_824))); setShowQuota(true); }}
             onSyncStorage={syncStorage}
             syncingUser={syncingUser}
           />
@@ -855,35 +1010,6 @@ export default function AdminUsersPage() {
             <div className="flex flex-col gap-3 pt-2">
               <Button variant="secondary" fullWidth type="button" onClick={() => setShowCreate(false)}>Cancel</Button>
               <Button fullWidth type="submit" loading={creating} leftIcon={<Plus size={15} />}>Create User</Button>
-            </div>
-          </form>
-        </Modal>
-
-        {/* ── Quota modal ── */}
-        <Modal open={showQuota} onClose={() => setShowQuota(false)} title="Update Storage Quota">
-          <form onSubmit={updateQuota} className="space-y-4">
-            {quotaUser && (
-              <div className="flex items-center gap-3 rounded-xl bg-gray-50 p-3 dark:bg-zinc-800/50">
-                <Avatar name={quotaUser.name} size={32} />
-                <div>
-                  <p className="text-sm font-semibold text-gray-900 dark:text-white">{quotaUser.name}</p>
-                  <p className="text-xs text-gray-400">
-                    {formatBytes(quotaUser.storageUsed)} used · current quota {formatBytes(quotaUser.storageQuota)}
-                  </p>
-                </div>
-              </div>
-            )}
-            <Input
-              label="New Quota (GB)"
-              type="number"
-              value={quotaGB}
-              onChange={(e) => setQuotaGB(e.target.value)}
-              min="1" max="10240" step="1"
-              helperText="1 GB = 1,073,741,824 bytes"
-            />
-            <div className="flex flex-col gap-3 pt-2">
-              <Button variant="secondary" fullWidth type="button" onClick={() => setShowQuota(false)}>Cancel</Button>
-              <Button fullWidth type="submit" loading={creating} leftIcon={<HardDrive size={15} />}>Update Quota</Button>
             </div>
           </form>
         </Modal>

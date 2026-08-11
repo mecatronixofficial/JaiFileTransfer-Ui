@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   User as UserIcon,
   Mail,
@@ -14,6 +14,8 @@ import {
   Save,
   Lock,
   AlertCircle,
+  Camera,
+  ImagePlus,
 } from "lucide-react";
 
 import DashboardLayout from "@/components/layout/DashboardLayout";
@@ -27,9 +29,9 @@ import { Avatar } from "@/components/ui";
 import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Link from "next/link";
+import Image from "next/image";
 
 const PHONE_REGEX = /^[0-9]{10}$/;
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function formatDate(d: string | Date | null | undefined): string {
   if (!d) return "—";
@@ -62,11 +64,22 @@ function formatDateTime(d: string | Date | null | undefined): string {
 function roleBadgeStyles(role?: string): string {
   switch (role?.toUpperCase()) {
     case "SUPERADMIN":
-      return "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400";
+      return "bg-[rgb(73,140,1)] text-white ring-1 ring-white/25";
     case "ADMIN":
-      return "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400";
+      return "bg-[rgb(73,140,1)] text-white ring-1 ring-white/25";
     default:
-      return "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400";
+      return "bg-[rgb(73,140,1)] text-white ring-1 ring-white/25";
+  }
+}
+
+function roleLabel(role?: string): string {
+  switch (role?.toUpperCase()) {
+    case "SUPERADMIN":
+      return "Super Admin";
+    case "ADMIN":
+      return "Admin";
+    default:
+      return "User";
   }
 }
 
@@ -82,18 +95,25 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
 
   const [saving, setSaving] = useState(false);
+  const [uploadingMedia, setUploadingMedia] = useState<"avatar" | "banner" | null>(null);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
 
   /* =========================
      POPULATE FROM USER
   ========================= */
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+
+    const timer = window.setTimeout(() => {
       setName(user.name ?? "");
       setEmail(user.email ?? "");
       setDepartment(user.department ?? "");
       setPhone(user.phone ?? "");
-    }
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [user]);
 
   /* =========================
@@ -103,11 +123,10 @@ export default function ProfilePage() {
     if (!user) return false;
     return (
       name.trim() !== (user.name ?? "") ||
-      email.trim() !== (user.email ?? "") ||
       department.trim() !== (user.department ?? "") ||
       phone.trim() !== (user.phone ?? "")
     );
-  }, [name, email, department, phone, user]);
+  }, [name, department, phone, user]);
 
   /* =========================
      SAVE
@@ -120,10 +139,6 @@ export default function ProfilePage() {
 
     if (!name.trim()) next.name = "Name is required";
     else if (name.trim().length > 100) next.name = "Maximum 100 characters";
-
-    if (!email.trim()) next.email = "Email is required";
-    else if (!EMAIL_REGEX.test(email.trim()))
-      next.email = "Enter a valid email";
 
     if (phone.trim() && !PHONE_REGEX.test(phone.trim())) {
       next.phone = "Phone must be a valid 10-digit number";
@@ -144,7 +159,6 @@ export default function ProfilePage() {
       setSaving(true);
       await usersApi.updateMe({
         name: name.trim(),
-        email: email.trim(),
         department: department.trim() || null,
         phone: phone.trim() || null,
       });
@@ -166,36 +180,127 @@ export default function ProfilePage() {
     setErrors({});
   }
 
+  async function handleMediaUpload(kind: "avatar" | "banner", file?: File) {
+    if (!file) return;
+
+    const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+    const maxBytes = (kind === "avatar" ? 5 : 8) * 1024 * 1024;
+    if (!allowedTypes.has(file.type)) {
+      showToast.error("Use a JPG, PNG, or WebP image");
+      return;
+    }
+    if (file.size > maxBytes) {
+      showToast.error(`${kind === "avatar" ? "Profile photo" : "Banner"} must be ${kind === "avatar" ? 5 : 8} MB or smaller`);
+      return;
+    }
+
+    try {
+      setUploadingMedia(kind);
+      await usersApi.uploadProfileMedia(kind, file);
+      await refreshUser();
+      showToast.success(`${kind === "avatar" ? "Profile photo" : "Banner"} updated successfully`);
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setUploadingMedia(null);
+      if (kind === "avatar" && avatarInputRef.current) avatarInputRef.current.value = "";
+      if (kind === "banner" && bannerInputRef.current) bannerInputRef.current.value = "";
+    }
+  }
+
   /* =========================
      UI
   ========================= */
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in mx-auto px-4 py-6 sm:px-6">
-          {/* ============== HEADER ============== */}
-          <div className="mb-8">
-            <h1 className="font-display text-3xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-4xl">
-              My Profile
-            </h1>
-            <p className="mt-2 text-base text-gray-500 dark:text-gray-400">
-              View and update your personal information
-            </p>
-          </div>
-
+        <div className="animate-fade-in mx-auto max-w-7xl px-3 py-3 sm:px-4 sm:py-4">
           {/* ============== PROFILE CARD (banner + identity) ============== */}
-          <Card className="mb-6 overflow-hidden">
-            <div className="relative h-32 bg-gradient-to-r from-orange-500 via-orange-400 to-amber-400">
-              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.25),transparent_50%)]" />
+          <Card className="mb-6 overflow-hidden border-0 shadow-xl shadow-[#fcaa01]/15">
+            <div className="relative min-h-44 overflow-hidden bg-[#fcaa01] px-6 pb-20 pt-7 sm:px-9 sm:pb-24 sm:pt-9">
+              {user?.profileBanner ? (
+                <>
+                  <Image
+                    src={user.profileBanner}
+                    alt="Profile banner"
+                    fill
+                    priority
+                    unoptimized
+                    sizes="100vw"
+                    className="object-cover"
+                  />
+                  <div className="pointer-events-none absolute inset-0 bg-linear-to-r from-[#fcaa01]/95 via-[#fcaa01]/70 to-[#fcaa01]/35" />
+                </>
+              ) : (
+                <>
+                  <div className="pointer-events-none absolute -right-14 -top-20 h-64 w-64 rounded-full border-[32px] border-white/15" />
+                  <div className="pointer-events-none absolute bottom-0 right-[28%] h-24 w-24 rounded-full bg-white/10" />
+                  <div className="pointer-events-none absolute -bottom-16 left-[42%] h-40 w-40 rounded-full border border-white/25" />
+                </>
+              )}
+              <div className="relative flex flex-col items-start justify-between gap-4 sm:flex-row">
+                <div className="max-w-2xl">
+                  <div className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/80 px-3 py-1.5 text-xs font-bold uppercase tracking-[0.16em] text-[rgb(62,120,1)] shadow-sm backdrop-blur-sm">
+                    <UserIcon size={13} /> Account profile
+                  </div>
+                  <h1 className="font-display text-3xl font-extrabold tracking-tight text-gray-950 sm:text-4xl">
+                    My Profile
+                  </h1>
+                  <p className="mt-2 max-w-xl text-sm font-medium leading-6 text-gray-800 sm:text-base">
+                    Keep your personal and contact information accurate across your workspace.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  loading={uploadingMedia === "banner"}
+                  disabled={uploadingMedia !== null}
+                  leftIcon={<ImagePlus size={15} />}
+                  onClick={() => bannerInputRef.current?.click()}
+                  className="!border-white/70 !bg-white/90 !text-gray-800 shadow-lg backdrop-blur-sm hover:!bg-white"
+                >
+                  {user?.profileBanner ? "Change banner" : "Upload banner"}
+                </Button>
+                <input
+                  ref={bannerInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="sr-only"
+                  onChange={(event) => void handleMediaUpload("banner", event.target.files?.[0])}
+                />
+              </div>
             </div>
 
-            <div className="px-6 pb-6 sm:px-8 -mt-14 relative">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-                <div className="rounded-full ring-4 ring-white shadow-lg dark:ring-gray-900">
-                  <Avatar name={user?.name || "U"} size={96} />
+            <div className="relative -mt-14 px-5 pb-6 sm:px-9 sm:pb-8">
+              <div className="flex flex-col gap-4 rounded-2xl border border-gray-200/80 bg-white/95 p-5 shadow-lg shadow-gray-900/5 backdrop-blur-xl sm:flex-row sm:items-center sm:p-6 dark:border-zinc-800 dark:bg-zinc-900/95">
+                <div className="relative w-fit rounded-full bg-white p-1.5 shadow-xl ring-1 ring-black/5 dark:bg-zinc-900 dark:ring-white/10">
+                  <Avatar
+                    name={user?.name || "U"}
+                    src={user?.avatar}
+                    size={92}
+                    className="!bg-none bg-[rgb(73,140,1)]"
+                  />
+                  <button
+                    type="button"
+                    aria-label="Upload profile photo"
+                    title="Upload profile photo"
+                    disabled={uploadingMedia !== null}
+                    onClick={() => avatarInputRef.current?.click()}
+                    className="absolute bottom-0 right-0 flex h-9 w-9 items-center justify-center rounded-full border-2 border-white bg-[rgb(73,140,1)] text-white shadow-lg transition hover:bg-[rgb(62,120,1)] disabled:cursor-not-allowed disabled:opacity-60 dark:border-zinc-900"
+                  >
+                    <Camera size={16} className={uploadingMedia === "avatar" ? "animate-pulse" : ""} />
+                  </button>
+                  <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="sr-only"
+                    onChange={(event) => void handleMediaUpload("avatar", event.target.files?.[0])}
+                  />
                 </div>
 
-                <div className="flex-1 sm:pb-2 min-w-0">
+                <div className="min-w-0 flex-1">
                   <h2 className="truncate text-2xl font-bold text-gray-900 dark:text-white">
                     {user?.name || "—"}
                   </h2>
@@ -208,7 +313,7 @@ export default function ProfilePage() {
                       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${roleBadgeStyles(user?.role)}`}
                     >
                       <Shield size={11} />
-                      {user?.role || "User"}
+                      {roleLabel(user?.role)}
                     </span>
 
                     {user?.isActive ? (
@@ -224,7 +329,7 @@ export default function ProfilePage() {
                     )}
 
                     {user?.isEmailVerified ? (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-blue-100 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2.5 py-1 text-[11px] font-semibold text-[rgb(62,120,1)] ring-1 ring-green-200 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-800">
                         <CheckCircle2 size={11} />
                         Email verified
                       </span>
@@ -241,16 +346,23 @@ export default function ProfilePage() {
           </Card>
 
           {/* ============== LAYOUT: FORM + META ============== */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_300px]">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
             {/* ============== EDIT FORM ============== */}
-            <Card className="p-6 sm:p-8">
+            <Card className="p-6 shadow-md shadow-gray-900/3 sm:p-8">
               <div className="mb-6">
-                <h3 className="text-base font-semibold text-gray-900 dark:text-white">
-                  Personal Information
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  Update your name, email, and contact details
-                </p>
+                <div className="flex items-center gap-3">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[rgb(73,140,1)] text-white shadow-md shadow-green-800/20">
+                    <UserIcon size={18} />
+                  </span>
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">
+                      Personal Information
+                    </h3>
+                    <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
+                      Update your name and contact details
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <form onSubmit={handleSave} className="space-y-5" noValidate>
@@ -270,12 +382,9 @@ export default function ProfilePage() {
                     label="Email Address"
                     type="email"
                     value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
                     leftIcon={<Mail size={16} />}
-                    error={errors.email}
                     autoComplete="email"
-                    required
+                    disabled
                   />
 
                   <Input
@@ -283,7 +392,7 @@ export default function ProfilePage() {
                     type="tel"
                     inputMode="numeric"
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                     placeholder="10-digit number"
                     leftIcon={<Phone size={16} />}
                     error={errors.phone}
@@ -310,7 +419,7 @@ export default function ProfilePage() {
                       : "All changes saved"}
                   </p>
 
-                  <div className="flex flex-col gap-3">
+                  <div className="flex flex-col gap-3 sm:flex-row">
                     <Button
                       type="button"
                       variant="secondary"
@@ -324,6 +433,7 @@ export default function ProfilePage() {
                       loading={saving}
                       disabled={!hasChanges}
                       leftIcon={<Save size={16} />}
+                      className="!border-[rgb(62,120,1)]/40 !from-[rgb(73,140,1)] !via-[rgb(73,140,1)] !to-[rgb(62,120,1)] !shadow-green-800/20 focus-visible:!ring-[rgb(73,140,1)]/40"
                     >
                       Save Changes
                     </Button>
@@ -335,7 +445,7 @@ export default function ProfilePage() {
             {/* ============== SIDE: ACCOUNT META ============== */}
             <aside className="space-y-4">
               {/* Account info */}
-              <Card className="p-5">
+              <Card className="p-5 shadow-sm">
                 <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Account
                 </h3>
@@ -343,7 +453,7 @@ export default function ProfilePage() {
                   <MetaRow
                     icon={<Shield size={14} />}
                     label="Role"
-                    value={user?.role ?? "—"}
+                    value={roleLabel(user?.role)}
                   />
                   <MetaRow
                     icon={<Calendar size={14} />}
@@ -370,16 +480,16 @@ export default function ProfilePage() {
               </Card>
 
               {/* Security shortcuts */}
-              <Card className="p-5">
+              <Card className="p-5 shadow-sm">
                 <h3 className="mb-4 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                   Security
                 </h3>
 
                 <Link
                   href="/settings"
-                  className="group flex items-center gap-3 rounded-xl border border-gray-200 p-3 transition-colors hover:border-orange-300 hover:bg-orange-50/40 dark:border-gray-800 dark:hover:border-orange-700 dark:hover:bg-orange-900/10"
+                  className="group flex items-center gap-3 rounded-xl border border-gray-200 p-3 transition-colors hover:border-[rgb(73,140,1)]/40 hover:bg-green-50/50 dark:border-gray-800 dark:hover:border-green-700 dark:hover:bg-green-900/10"
                 >
-                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 dark:text-orange-400">
+                  <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-green-50 text-[rgb(73,140,1)] dark:bg-green-900/20 dark:text-green-400">
                     <Lock size={16} />
                   </span>
                   <div className="min-w-0 flex-1">
@@ -394,11 +504,11 @@ export default function ProfilePage() {
               </Card>
 
               {/* Help */}
-              <Card className="border-orange-200 bg-orange-50/40 p-5 dark:border-orange-900/50 dark:bg-orange-900/10">
-                <h3 className="mb-1.5 text-sm font-semibold text-orange-900 dark:text-orange-300">
+              <Card className="border-[#fcaa01]/35 bg-[#fcaa01]/10 p-5 dark:border-[#fcaa01]/30 dark:bg-[#fcaa01]/10">
+                <h3 className="mb-1.5 text-sm font-semibold text-gray-900 dark:text-[#fcaa01]">
                   Need help?
                 </h3>
-                <p className="text-xs leading-relaxed text-orange-800/80 dark:text-orange-200/70">
+                <p className="text-xs leading-relaxed text-gray-700 dark:text-gray-300">
                   If you need to change your role or have account issues,
                   contact your administrator.
                 </p>

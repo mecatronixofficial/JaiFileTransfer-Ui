@@ -69,7 +69,6 @@ interface HeaderProps {
   onMobileSidebarOpen?: () => void;
   onUpload?: () => void;
   storageUsed?: number;
-  storageQuota?: number;
   storageLoading?: boolean;
 }
 
@@ -216,7 +215,6 @@ export default function Header({
   onMobileSidebarOpen,
   onUpload,
   storageUsed = 0,
-  storageQuota = 0,
   storageLoading = false,
 }: HeaderProps) {
   const { user, logout } = useAuth();
@@ -257,22 +255,11 @@ export default function Header({
     () => getRouteContext(pathname, searchParams.get("type")),
     [pathname, searchParams],
   );
-  const storagePct = useMemo(() => {
-    if (!storageQuota || storageQuota <= 0) return 0;
-    return Math.min((storageUsed / storageQuota) * 100, 100);
-  }, [storageUsed, storageQuota]);
-  const hasStorageQuota = storageQuota > 0;
-  const storageLabel = hasStorageQuota
-    ? `${formatBytes(storageUsed)} / ${formatBytes(storageQuota)}`
-    : `${formatBytes(storageUsed)} used`;
+  const storageLabel = `${formatBytes(storageUsed)} used`;
   const storageTitle = storageLoading
     ? "Loading storage usage"
-    : hasStorageQuota
-      ? `${storageLabel} (${storagePct.toFixed(0)}% used)`
-      : storageLabel;
-  const storageIconClass = hasStorageQuota && storagePct >= 90
-    ? "text-red-500"
-    : "text-orange-500";
+    : storageLabel;
+  const storageIconClass = "text-orange-500";
   /* =========================
      LOAD NOTIFICATIONS
   ========================= */
@@ -473,7 +460,7 @@ export default function Header({
   ========================= */
   return (
     <>
-      <header className="sticky top-0 z-40 flex h-16 items-center justify-between gap-3 border-b border-gray-200/70 bg-white/80 px-4 backdrop-blur-xl transition-colors duration-200 dark:border-zinc-800/60 dark:bg-zinc-950/80 sm:px-6">
+      <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center justify-between gap-3 border-b border-gray-200/70 bg-white/80 px-4 backdrop-blur-xl transition-colors duration-200 dark:border-zinc-800/60 dark:bg-zinc-950/80 sm:px-6">
 
         {/* ── LEFT ── */}
         <div className="flex items-center gap-2.5">
@@ -546,11 +533,6 @@ export default function Header({
             ) : (
               <span className="max-w-40 truncate text-[11px] font-semibold text-gray-600 dark:text-gray-300">
                 {storageLabel}
-                {hasStorageQuota && (
-                  <span className="ml-1 font-normal text-gray-400">
-                    {storagePct.toFixed(0)}%
-                  </span>
-                )}
               </span>
             )}
           </div>
@@ -707,7 +689,7 @@ export default function Header({
               aria-expanded={showUserMenu}
               aria-haspopup="true"
             >
-              <Avatar name={user?.name || "User"} size={28} />
+              <Avatar name={user?.name || "User"} src={user?.avatar} size={28} />
               <ChevronDown
                 size={13}
                 className={`mr-0.5 text-gray-400 transition-transform duration-200 ${showUserMenu ? "rotate-180" : ""}`}
@@ -722,7 +704,7 @@ export default function Header({
                 {/* User info */}
                 <div className="border-b border-gray-100/80 px-4 py-3.5 dark:border-zinc-800/80">
                   <div className="flex items-center gap-2.5">
-                    <Avatar name={user?.name || "User"} size={38} />
+                    <Avatar name={user?.name || "User"} src={user?.avatar} size={38} />
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-[13px] font-semibold text-gray-900 dark:text-white">
                         {user?.name || "User"}

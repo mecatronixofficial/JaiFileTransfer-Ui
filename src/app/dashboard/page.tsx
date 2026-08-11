@@ -44,7 +44,7 @@ import Button from "@/components/ui/Button";
 import { Avatar, Spinner } from "@/components/ui";
 import FileTypeIcon from "@/components/ui/FileTypeIcon";
 import {
-  adminApi, filesApi, foldersApi, linksApi, notificationsApi,
+  filesApi, foldersApi, linksApi, notificationsApi,
   transactionsApi, transfersApi, uploadApi, usersApi,
 } from "@/lib/api";
 import { handleApiError } from "@/lib/error-handler";
@@ -287,35 +287,14 @@ function QuickAction({ icon, label, href, color, badge }: {
 }
 
 /* ─── Storage bar (scaleX avoids inline-width linter flag) ─── */
-function StorageBar({ used, quota, loading }: { used: number; quota: number; loading: boolean }) {
-  const pct   = quota > 0 ? Math.min((used / quota) * 100, 100) : 0;
-  const color = pct > 90
-    ? "from-red-500 to-rose-400"
-    : pct > 70
-    ? "from-amber-500 to-yellow-400"
-    : "from-orange-500 to-amber-400";
-
+function StorageBar({ used, loading }: { used: number; loading: boolean }) {
   if (loading) return <div className="h-3 animate-pulse rounded-full bg-gray-200 dark:bg-zinc-800" />;
 
   return (
-    <>
-      <div className="mb-2 flex justify-between text-sm">
-        <span className="font-semibold text-gray-900 dark:text-white">{formatBytes(used)}</span>
-        <span className="text-gray-500">{quota > 0 ? `of ${formatBytes(quota)}` : "No quota set"}</span>
-      </div>
-      <div className="h-2.5 overflow-hidden rounded-full bg-gray-200 dark:bg-zinc-800">
-        <div
-          className={`h-full origin-left rounded-full bg-linear-to-r ${color} transition-all duration-700`}
-          style={{ transform: `scaleX(${pct / 100})` }}
-        />
-      </div>
-      <div className="mt-1.5 flex items-center justify-between text-xs text-gray-500">
-        <span>{pct.toFixed(1)}% used</span>
-        {quota > 0 && (
-          <span className="text-emerald-600 dark:text-emerald-400">{formatBytes(quota - used)} free</span>
-        )}
-      </div>
-    </>
+    <div>
+      <p className="text-xs font-medium text-gray-500 dark:text-gray-400">Storage used</p>
+      <p className="mt-1 text-xl font-extrabold text-gray-900 dark:text-white">{formatBytes(used)}</p>
+    </div>
   );
 }
 
@@ -770,20 +749,12 @@ function UserDashboard({ name, user }: { name: string; user: any }) {
   }, [load]);
 
   const storagePie = useMemo(() => {
-    const s = {
-      used:  storage.used  || readStorageUsed(user),
-      quota: storage.quota || readStorageQuota(user),
-    };
-    if (s.quota <= 0) return [];
-    return [
-      { name: "Used", value: Math.min(s.used, s.quota) },
-      { name: "Free", value: Math.max(s.quota - s.used, 0) },
-    ];
+    const used = storage.used || readStorageUsed(user);
+    return used > 0 ? [{ name: "Used", value: used }] : [];
   }, [storage, user]);
 
   const storageInfo = {
-    used:  storage.used  || readStorageUsed(user),
-    quota: storage.quota || readStorageQuota(user),
+    used: storage.used || readStorageUsed(user),
   };
 
   const today = new Date().toLocaleDateString("en", {
@@ -844,16 +815,10 @@ function UserDashboard({ name, user }: { name: string; user: any }) {
               </div>
             ) : (
               <>
-                <div className="h-2 overflow-hidden rounded-full bg-white/20">
-                  <div
-                    className="h-full origin-left rounded-full bg-white transition-all duration-700"
-                    style={{ transform: `scaleX(${storageInfo.quota > 0 ? Math.min(storageInfo.used / storageInfo.quota, 1) : 0})` }}
-                  />
-                </div>
-                <p className="mt-2 text-xs text-orange-100">
-                  {formatBytes(storageInfo.used)} of{" "}
-                  {storageInfo.quota > 0 ? formatBytes(storageInfo.quota) : "∞"} used
+                <p className="text-2xl font-extrabold text-white">
+                  {formatBytes(storageInfo.used)}
                 </p>
+                <p className="mt-1 text-xs text-orange-100">Used on Cloudflare R2</p>
                 <Link href="/settings" className="mt-1.5 block text-[11px] text-orange-200 hover:text-white">
                   Manage storage →
                 </Link>
@@ -937,7 +902,7 @@ function UserDashboard({ name, user }: { name: string; user: any }) {
                 </ResponsiveContainer>
               )}
               <div className="w-full">
-                <StorageBar used={storageInfo.used} quota={storageInfo.quota} loading={false} />
+                <StorageBar used={storageInfo.used} loading={false} />
               </div>
             </div>
           )}
@@ -1483,7 +1448,7 @@ function AdminDashboard({ name }: { name: string }) {
             Manage <ArrowUpRight size={13} />
           </Link>
         </div>
-        <StorageBar used={storage.used} quota={storage.quota} loading={loading} />
+        <StorageBar used={storage.used} loading={loading} />
       </Card>
 
       {/* ── Team table + activity ── */}
@@ -1616,66 +1581,28 @@ function SuperAdminDashboard({ name }: { name: string }) {
     try {
       if (silent) setRefreshing(true); else setLoading(true);
 
-      const [ovRes, storRes, usersRes, actRes, statsRes, notifRes, adminLinksRes, allLinksRes, transfersRes] =
+      const [dashboardRes, notifRes] =
         await Promise.allSettled([
-          adminApi.overview(),
-          adminApi.storage(),
-          adminApi.users({ limit: 8 }),
-          adminApi.auditLogs({ limit: 50 }),
-          usersApi.adminStats(),
+          loadAdminDashboardData({ includeSuperAdminDashboard: true }),
           notificationsApi.adminStats(),
-          adminApi.links(),
-          linksApi.adminList(),
-          adminApi.transfers({ limit: 100 }),
         ]);
 
-      const adminLinks = adminLinksRes.status === "fulfilled" ? getLinksFromResponse(adminLinksRes.value.data) : [];
-      const allLinks = allLinksRes.status === "fulfilled" ? getLinksFromResponse(allLinksRes.value.data) : [];
-      const transferLinks = transfersRes.status === "fulfilled"
-        ? getTransfersFromResponse(transfersRes.value.data)
-          .map((transfer) => transfer.link)
-          .filter((link): link is NonNullable<typeof link> => Boolean(link?.status))
-        : [];
-      const hasLinkCountSource =
-        adminLinksRes.status === "fulfilled" ||
-        allLinksRes.status === "fulfilled" ||
-        transfersRes.status === "fulfilled";
-      const linkCounts = hasLinkCountSource
-        ? getLinkStatusCounts([...adminLinks, ...allLinks, ...transferLinks])
-        : null;
+      if (dashboardRes.status === "fulfilled") {
+        const data = dashboardRes.value;
+        const activity = data.auditLogs.length > 0
+          ? data.auditLogs
+          : data.recentActivity;
 
-      if (ovRes.status === "fulfilled") {
-        const d = ovRes.value.data?.data ?? ovRes.value.data ?? {};
-        setOverview({
-          ...d,
-          activeLinks: linkCounts?.active ?? d.activeLinks,
-          expiredLinks: linkCounts?.expired ?? d.expiredLinks,
-          disabledLinks: linkCounts?.disabled ?? d.disabledLinks,
-        });
+        setOverview(data.overview);
+        setUserStats(data.userStats);
+        setStorage(data.storage);
+        setTopUsers(data.teamUsers.slice(0, 8));
+        setAuditLog(activity.slice(0, 8));
+        setWeekSeries(toWeekSeries(groupByDay(activity), "events"));
+      } else {
+        handleApiError(dashboardRes.reason);
       }
-      if (storRes.status === "fulfilled") {
-        const d = storRes.value.data?.data ?? storRes.value.data ?? {};
-        setStorage({
-          used:  readStorageUsed(d),
-          quota: readStorageQuota(d),
-        });
-      }
-      if (usersRes.status === "fulfilled") {
-        const inner = usersRes.value.data?.data ?? usersRes.value.data;
-        const list  = inner?.users ?? (Array.isArray(inner) ? inner : []);
-        setTopUsers(Array.isArray(list) ? list.slice(0, 8) : []);
-      }
-      if (actRes.status === "fulfilled") {
-        const inner = actRes.value.data?.data ?? actRes.value.data;
-        const list  = inner?.activities ?? inner?.activity ?? inner?.events ?? inner?.items ?? (Array.isArray(inner) ? inner : []);
-        const arr   = Array.isArray(list) ? list : [];
-        setAuditLog(arr.slice(0, 8));
-        setWeekSeries(toWeekSeries(groupByDay(arr), "events"));
-      }
-      if (statsRes.status === "fulfilled") {
-        const d = statsRes.value.data?.data ?? statsRes.value.data ?? {};
-        setUserStats(d);
-      }
+
       if (notifRes.status === "fulfilled") {
         const d = notifRes.value.data?.data ?? notifRes.value.data ?? {};
         setNotifStats(d);
@@ -1717,7 +1644,7 @@ function SuperAdminDashboard({ name }: { name: string }) {
   return (
     <div className="space-y-7">
       {/* ── Hero banner ── */}
-      <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-red-600 via-red-700 to-orange-600 p-8 shadow-xl shadow-red-500/20">
+      <div className="relative overflow-hidden rounded-3xl bg-[#fcaa01] p-8 shadow-xl shadow-[#fcaa01]/20">
         <div className="pointer-events-none absolute inset-0 overflow-hidden opacity-10">
           <div className="absolute -right-12 -top-12 h-60 w-60 rounded-full bg-white" />
           <div className="absolute -bottom-10 -left-10 h-44 w-44 rounded-full bg-white" />
@@ -1725,13 +1652,13 @@ function SuperAdminDashboard({ name }: { name: string }) {
         </div>
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/20 px-3 py-1 text-xs font-bold text-white">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-[rgb(73,140,1)] px-3 py-1 text-xs font-bold text-white">
               <Shield size={11} /> Super Admin
             </div>
-            <h1 className="text-3xl font-bold text-white">
-              Platform Overview, <span className="text-red-100">{name}</span>
+            <h1 className="text-3xl font-bold text-gray-950">
+              Platform Overview, <span className="text-[rgb(62,120,1)]">{name}</span>
             </h1>
-            <p className="mt-1.5 max-w-lg text-sm text-red-100/90">
+            <p className="mt-1.5 max-w-lg text-sm text-gray-800">
               {loading
                 ? "Loading platform stats…"
                 : `${(s.totalUsers ?? us.total ?? 0).toLocaleString()} users · ${(s.totalTransfers ?? 0).toLocaleString()} transfers · ${formatBytes(storage.used)} stored`}
@@ -1747,7 +1674,10 @@ function SuperAdminDashboard({ name }: { name: string }) {
               Refresh
             </Button>
             <Link href="/profile">
-              <Button leftIcon={<Shield size={15} />} className="rounded-xl border-0 bg-white/20 text-white shadow-none backdrop-blur-sm hover:bg-white/30">
+              <Button
+                leftIcon={<Shield size={15} />}
+                className="rounded-xl !border-[rgb(62,120,1)]/40 !from-[rgb(73,140,1)] !via-[rgb(73,140,1)] !to-[rgb(62,120,1)] !shadow-green-800/20 focus-visible:!ring-[rgb(73,140,1)]/40"
+              >
                 Super Admin
               </Button>
             </Link>
@@ -1757,10 +1687,10 @@ function SuperAdminDashboard({ name }: { name: string }) {
 
       {/* ── Primary stats ── */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard loading={loading} icon={<Users size={20} />}     label="Total Users"     value={(s.totalUsers ?? us.total ?? 0).toLocaleString()}                    from="from-red-500"    to="to-rose-600"    href="/admin/users" />
-        <StatCard loading={loading} icon={<Send size={20} />}      label="Total Transfers" value={(s.totalTransfers ?? 0).toLocaleString()}                            from="from-orange-500" to="to-amber-500"   href="/admin" />
+        <StatCard loading={loading} icon={<Users size={20} />}     label="Total Users"     value={(s.totalUsers ?? us.total ?? 0).toLocaleString()}                    from="from-[rgb(73,140,1)]" to="to-[rgb(62,120,1)]" href="/admin/users" />
+        <StatCard loading={loading} icon={<Send size={20} />}      label="Total Transfers" value={(s.totalTransfers ?? 0).toLocaleString()}                            from="from-orange-500" to="to-amber-500"   href="/admin/transfers" />
         <StatCard loading={loading} icon={<HardDrive size={20} />} label="Total Storage"   value={formatBytes(s.totalStorage ?? storage.used ?? 0)} sub="All users"   from="from-purple-500" to="to-violet-600"  href="/admin/storage" />
-        <StatCard loading={loading} icon={<Download size={20} />}  label="Total Downloads" value={(s.totalDownloads ?? s.recentDownloads ?? 0).toLocaleString()}       from="from-blue-500"   to="to-cyan-500"    href="/admin" />
+        <StatCard loading={loading} icon={<Download size={20} />}  label="Total Downloads" value={(s.totalDownloads ?? s.recentDownloads ?? 0).toLocaleString()}       from="from-blue-500"   to="to-cyan-500"    href="/admin/transfers" />
       </div>
 
       {/* ── Secondary metrics grid ── */}
@@ -1929,7 +1859,7 @@ function SuperAdminDashboard({ name }: { name: string }) {
             Manage <ArrowUpRight size={13} />
           </Link>
         </div>
-        <StorageBar used={storage.used} quota={storage.quota} loading={loading} />
+        <StorageBar used={storage.used} loading={loading} />
       </Card>
 
       {/* ── Top users + audit log ── */}

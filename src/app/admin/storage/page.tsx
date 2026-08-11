@@ -252,8 +252,6 @@ export default function AdminStoragePage() {
 
   /* ─── Derived numbers ─── */
   const totalUsed  = storageData?.totalUsedBytes ?? storageData?.summary?.totalSizeBytes ?? storageData?.totalUsed  ?? storageData?.totalStorage ?? users.reduce((s, u) => s + (u.storageUsed  || 0), 0);
-  const totalQuota = storageData?.totalQuotaBytes ?? storageData?.totalQuota ?? storageData?.totalAllocated ?? users.reduce((s, u) => s + (u.storageQuota || 0), 0);
-  const usedPct    = totalQuota > 0 ? Math.min((totalUsed / totalQuota) * 100, 100) : 0;
 
   const breakdown: StorageBreakdown = parseStorageBreakdown(storageData);
   const breakdownTotal = Math.max(
@@ -279,8 +277,6 @@ export default function AdminStoragePage() {
 
   const highUsageUsers = sortedUsers.filter((u) => u.storageQuota > 0 && (u.storageUsed / u.storageQuota) >= 0.8);
 
-  const overviewColor = usedPct > 80 ? "text-red-500" : usedPct > 60 ? "text-amber-500" : "text-emerald-500";
-  const barColor      = usedPct > 80 ? "bg-red-500"   : usedPct > 60 ? "bg-amber-500"   : "bg-orange-500";
 
   /* ─── Quota update ─── */
   async function handleQuotaSave(e: { preventDefault(): void }) {
@@ -343,7 +339,7 @@ export default function AdminStoragePage() {
               </div>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Storage Manager</h1>
-                <p className="text-xs text-gray-400 dark:text-gray-500">Live platform storage, quotas, upload sessions, and sync tools</p>
+                <p className="text-xs text-gray-400 dark:text-gray-500">Live platform storage usage, upload sessions, and sync tools</p>
               </div>
             </div>
             <button
@@ -368,7 +364,7 @@ export default function AdminStoragePage() {
           )}
 
           {/* ── High usage alerts ── */}
-          {!loading && highUsageUsers.length > 0 && (
+          {false && !loading && highUsageUsers.length > 0 && (
             <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/30 dark:bg-amber-950/20">
               <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
               <div className="min-w-0 flex-1">
@@ -404,20 +400,18 @@ export default function AdminStoragePage() {
                 <p className="mt-1 text-xs text-gray-400">across {users.length} user{users.length !== 1 ? "s" : ""}</p>
               </div>
 
-              {/* Total Quota */}
+              {/* Users tracked */}
               <div className="rounded-2xl border border-gray-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Total Quota</p>
-                <p className="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">{formatBytes(totalQuota)}</p>
-                <p className="mt-1 text-xs text-gray-400">allocated platform-wide</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Users Tracked</p>
+                <p className="mt-2 text-3xl font-extrabold text-gray-900 dark:text-white">{users.length}</p>
+                <p className="mt-1 text-xs text-gray-400">with measured storage usage</p>
               </div>
 
-              {/* Utilization */}
+              {/* Storage model */}
               <div className="rounded-2xl border border-gray-200/80 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900">
-                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Utilization</p>
-                <p className={`mt-2 text-3xl font-extrabold ${overviewColor}`}>{usedPct.toFixed(1)}%</p>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
-                  <div className={`h-full origin-left rounded-full transition-transform duration-700 ${barColor}`} style={{ transform: `scaleX(${(usedPct / 100).toFixed(4)})` }} />
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">Storage Model</p>
+                <p className="mt-2 text-3xl font-extrabold text-emerald-600">Unlimited</p>
+                <p className="mt-1 text-xs text-gray-400">usage tracking only</p>
               </div>
 
               {/* Files / Sessions */}
@@ -436,16 +430,16 @@ export default function AdminStoragePage() {
               <div className="rounded-2xl border border-gray-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
                   <ShieldCheck size={15} className="text-emerald-500" />
-                  Quota Coverage
+                  Storage Usage
                 </div>
-                <p className="mt-2 text-xs text-gray-500">{users.filter((u) => u.storageQuota > 0).length} of {users.length} users have quota assigned</p>
+                <p className="mt-2 text-xs text-gray-500">{formatBytes(totalUsed)} currently used</p>
               </div>
               <div className="rounded-2xl border border-gray-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
                   <AlertTriangle size={15} className="text-amber-500" />
-                  High Usage
+                  No Usage Limit
                 </div>
-                <p className="mt-2 text-xs text-gray-500">{highUsageUsers.length} users at or above 80% quota</p>
+                <p className="mt-2 text-xs text-gray-500">Uploads are not restricted by a user quota</p>
               </div>
               <div className="rounded-2xl border border-gray-200/80 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
                 <div className="flex items-center gap-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
@@ -564,24 +558,18 @@ export default function AdminStoragePage() {
                       <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">#</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">User</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Used</th>
-                      <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Quota</th>
-                      <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400 min-w-32">Utilization</th>
                       <th className="px-5 py-3 text-left text-[10px] font-bold uppercase tracking-wider text-gray-400">Actions</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-zinc-800/50">
                     {filteredUsers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-10 text-center text-sm text-gray-400">
+                        <td colSpan={4} className="py-10 text-center text-sm text-gray-400">
                           {search ? "No users match your search" : "No users found"}
                         </td>
                       </tr>
                     ) : (
                       filteredUsers.map((u, i) => {
-                        const pct = u.storageQuota > 0
-                          ? Math.min((u.storageUsed / u.storageQuota) * 100, 100)
-                          : 0;
-                        const uBar = pct >= 90 ? "bg-red-500" : pct >= 75 ? "bg-amber-500" : "bg-orange-500";
                         return (
                           <tr key={u.id} className="group transition-colors hover:bg-gray-50/50 dark:hover:bg-zinc-800/20">
                             <td className="px-5 py-3 text-xs text-gray-400">#{i + 1}</td>
@@ -597,32 +585,15 @@ export default function AdminStoragePage() {
                             <td className="px-5 py-3 text-xs font-medium text-gray-700 dark:text-gray-300">
                               {formatBytes(u.storageUsed)}
                             </td>
-                            <td className="px-5 py-3 text-xs text-gray-500 dark:text-gray-400">
-                              {formatBytes(u.storageQuota)}
-                            </td>
-                            <td className="px-5 py-3">
-                              <div className="flex items-center gap-2">
-                                <div className="h-1.5 w-28 overflow-hidden rounded-full bg-gray-100 dark:bg-zinc-800">
-                                  <div
-                                    className={`h-full origin-left rounded-full transition-transform duration-500 ${uBar}`}
-                                    style={{ transform: `scaleX(${(pct / 100).toFixed(4)})` }}
-                                  />
-                                </div>
-                                <span className={`text-[11px] font-semibold ${pct >= 90 ? "text-red-500" : pct >= 75 ? "text-amber-500" : "text-gray-500"}`}>
-                                  {pct.toFixed(0)}%
-                                </span>
-                                {pct >= 90 && <AlertTriangle size={11} className="text-red-500" />}
-                              </div>
-                            </td>
                             <td className="px-5 py-3">
                               <div className="flex items-center gap-2 opacity-0 transition group-hover:opacity-100">
-                                <button
+                                {false && <button
                                   type="button"
-                                  onClick={() => { setQuotaUser(u); setQuotaGB(String(Math.round((u.storageQuota || 10_737_418_240) / 1_073_741_824))); }}
+                                  onClick={() => { setQuotaUser(u); setQuotaGB(String(Math.round(u.storageQuota / 1_073_741_824))); }}
                                   className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1 text-[11px] font-medium text-gray-600 transition hover:border-orange-300 hover:bg-orange-50 hover:text-orange-600 dark:border-zinc-700 dark:text-gray-400 dark:hover:border-orange-700 dark:hover:bg-orange-950/20 dark:hover:text-orange-400"
                                 >
                                   <HardDrive size={10} /> Quota
-                                </button>
+                                </button>}
                                 <button
                                   type="button"
                                   disabled={syncingUser === u.id}
@@ -644,7 +615,7 @@ export default function AdminStoragePage() {
           </Card>
 
           {/* ── High-usage alerts section ── */}
-          {!loading && highUsageUsers.length > 0 && (
+          {false && !loading && highUsageUsers.length > 0 && (
             <Card className="overflow-hidden">
               <div className="border-b border-gray-100 px-5 py-4 dark:border-zinc-800">
                 <div className="flex items-center gap-2">
@@ -676,7 +647,7 @@ export default function AdminStoragePage() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => { setQuotaUser(u); setQuotaGB(String(Math.round((u.storageQuota || 10_737_418_240) / 1_073_741_824))); }}
+                        onClick={() => { setQuotaUser(u); setQuotaGB(String(Math.round(u.storageQuota / 1_073_741_824))); }}
                         className="shrink-0 rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-100 dark:border-amber-800/30 dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/40"
                       >
                         Expand
@@ -690,8 +661,8 @@ export default function AdminStoragePage() {
         </div>
 
         {/* ── Quota modal ── */}
-        <Modal
-          open={quotaUser !== null}
+        {quotaUser && <Modal
+          open={false}
           onClose={() => setQuotaUser(null)}
           title="Update Storage Quota"
         >
@@ -727,7 +698,7 @@ export default function AdminStoragePage() {
               </Button>
             </div>
           </form>
-        </Modal>
+        </Modal>}
 
       </DashboardLayout>
     </AuthGuard>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, type FormEvent } from "react";
+import { useState, useEffect, useId, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -10,8 +10,11 @@ import {
   ArrowLeft,
   Shield,
   CheckCircle2,
-  Home,
   Check,
+  Sparkles,
+  FolderLock,
+  Zap,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { showToast } from "@/lib/toast";
@@ -20,6 +23,27 @@ import Input from "@/components/ui/Input";
 import Button from "@/components/ui/Button";
 import Image from "next/image";
 import Img_Helper from "@/helper/img_helper";
+
+const features = [
+  {
+    title: "Secure storage",
+    description: "Protect important files with encrypted cloud storage.",
+    icon: FolderLock,
+    color: "bg-green-50 text-[rgb(73,140,1)]",
+  },
+  {
+    title: "Fast transfers",
+    description: "Send large files quickly without complicated steps.",
+    icon: Zap,
+    color: "bg-orange-50 text-orange-600",
+  },
+  {
+    title: "Team sharing",
+    description: "Share files securely with employees, clients, and teams.",
+    icon: Users,
+    color: "bg-lime-50 text-lime-700",
+  },
+];
 
 type Step = "login" | "twoFactor" | "forgot" | "reset";
 
@@ -46,16 +70,24 @@ function OtpInput({
   value,
   onChange,
   error,
+  disabled = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   error?: string;
+  disabled?: boolean;
 }) {
   const refs = useRef<(HTMLInputElement | null)[]>([]);
+  const errorId = useId();
 
   function handleChange(i: number, e: React.ChangeEvent<HTMLInputElement>) {
     const char = e.target.value.replace(/\D/g, "").slice(-1);
-    if (!char) return;
+    if (!char) {
+      if (value[i]) {
+        onChange(value.substring(0, i) + value.substring(i + 1));
+      }
+      return;
+    }
     const next = value.substring(0, i) + char + value.substring(i + 1);
     onChange(next.substring(0, 6));
     if (i < 5) refs.current[i + 1]?.focus();
@@ -92,8 +124,13 @@ function OtpInput({
             ref={(el) => { refs.current[i] = el; }}
             type="text"
             inputMode="numeric"
+            pattern="[0-9]*"
             maxLength={1}
+            disabled={disabled}
+            autoComplete={i === 0 ? "one-time-code" : "off"}
             aria-label={`OTP digit ${i + 1}`}
+            aria-invalid={Boolean(error)}
+            aria-describedby={error ? errorId : undefined}
             title={`OTP digit ${i + 1}`}
             placeholder="·"
             value={value[i] || ""}
@@ -103,7 +140,7 @@ function OtpInput({
             className={`
               h-10 w-full min-w-0 text-center text-sm font-bold min-[380px]:h-11 min-[380px]:text-base
               rounded-xl border-2 bg-white text-gray-900 min-[380px]:rounded-2xl dark:bg-zinc-900 dark:text-white
-              transition-all duration-200 outline-none shadow-sm
+              transition-all duration-200 outline-none shadow-sm disabled:cursor-not-allowed disabled:opacity-60
               focus:ring-4
               ${error
                 ? "border-red-400 focus:border-red-500 focus:ring-red-500/15"
@@ -116,7 +153,9 @@ function OtpInput({
         ))}
       </div>
       {error && (
-        <p className="mt-2 text-center text-sm text-red-500 font-medium">{error}</p>
+        <p id={errorId} role="alert" className="mt-2 text-center text-sm font-medium text-red-500">
+          {error}
+        </p>
       )}
     </div>
   );
@@ -149,13 +188,15 @@ export default function LoginPage() {
   async function handleLogin(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrors({});
-    if (!email.trim()) return setErrors({ email: "Email is required" });
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return setErrors({ email: "Email is required" });
     if (!password.trim()) return setErrors({ password: "Password is required" });
     try {
       setLoading(true);
-      // AuthContext.login() calls router.replace("/dashboard") internally â€” no need to do it here
-      const result = await login(email, password);
+      // AuthContext.login() handles the dashboard redirect.
+      const result = await login(normalizedEmail, password);
       if (result.requiresTwoFactor) {
+        setEmail(result.email ?? normalizedEmail);
         setStep("twoFactor");
         showToast.success("Verification code sent");
       } else {
@@ -193,11 +234,13 @@ export default function LoginPage() {
   async function handleForgotPassword(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setErrors({});
-    if (!email.trim()) return setErrors({ email: "Email is required" });
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!normalizedEmail) return setErrors({ email: "Email is required" });
     try {
       setLoading(true);
       const { authApi } = await import("@/lib/api");
-      await authApi.forgotPassword(email);
+      await authApi.forgotPassword(normalizedEmail);
+      setEmail(normalizedEmail);
       showToast.success("Reset instructions sent");
       setStep("reset");
     } catch (err: unknown) {
@@ -215,7 +258,7 @@ export default function LoginPage() {
     try {
       setLoading(true);
       const { authApi } = await import("@/lib/api");
-      await authApi.resetPassword({ email, otp: resetToken, newPassword: newPass });
+      await authApi.resetPassword({ email: email.trim().toLowerCase(), otp: resetToken, newPassword: newPass });
       showToast.success("Password reset successful");
       setStep("login");
       setPassword("");
@@ -228,7 +271,7 @@ export default function LoginPage() {
     }
   }
 
-  /* â”€â”€ Loading screen â”€â”€ */
+  /* Loading screen */
   if (isLoading) {
     return (
       <div className="flex min-h-dvh items-center justify-center bg-white dark:bg-zinc-950">
@@ -244,124 +287,154 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-dvh w-full min-w-0 overflow-x-hidden bg-white dark:bg-zinc-950 lg:h-dvh lg:overflow-hidden">
+    <div className="min-h-dvh w-full min-w-0 overflow-x-hidden bg-white dark:bg-zinc-950 lg:grid lg:h-dvh lg:grid-cols-2 lg:overflow-hidden">
+      <section className="relative hidden min-h-0 min-w-0 overflow-hidden bg-gradient-to-br from-[#f6faef] via-white to-orange-50 lg:flex lg:flex-col">
+        <div className="pointer-events-none absolute inset-0">
+          <Image
+            src={Img_Helper.home.background}
+            alt=""
+            fill
+            loading="eager"
+            sizes="(min-width: 1024px) 50vw, 0px"
+            className="object-cover object-center"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-white/90 via-[#f7faef]/65 to-white/35" />
+          <div className="absolute -left-24 top-20 h-80 w-80 rounded-full bg-[rgb(73,140,1)]/10 blur-3xl" />
+          <div className="absolute -right-20 bottom-10 h-96 w-96 rounded-full bg-orange-400/15 blur-3xl" />
+        </div>
 
-      <div className="relative hidden min-w-0 flex-col overflow-hidden bg-[rgb(73,140,1)] lg:flex lg:w-1/2">
+        <div className="login-grid-overlay pointer-events-none absolute inset-0 opacity-35" />
+        <div className="pointer-events-none absolute -left-32 -top-32 h-96 w-96 rounded-full bg-[rgb(73,140,1)]/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-40 -right-28 h-[30rem] w-[30rem] rounded-full bg-orange-300/20 blur-3xl" />
 
-        {/* Grid overlay */}
-        <div className="login-grid-overlay absolute inset-0 opacity-[0.06]" />
-
-        {/* Glow blobs */}
-        <div className="absolute -top-40 -left-40 h-[28rem] w-[28rem] rounded-full bg-white/10 blur-3xl" />
-        <div className="absolute bottom-0 -right-28 h-80 w-80 rounded-full bg-white/15 blur-3xl" />
-        <div className="absolute top-1/2 -right-10 h-64 w-64 -translate-y-1/2 rounded-full bg-lime-200/15 blur-2xl" />
-
-        <div className="relative z-10 flex h-full min-h-0 flex-col p-6 xl:p-8 2xl:p-10">
-
-          {/* Top bar */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/20 backdrop-blur-sm ring-1 ring-white/30 shadow-lg">
+        <div className="scrollbar-hide relative z-10 flex h-full min-h-0 w-full flex-col overflow-y-auto px-7 py-6 xl:px-12 xl:py-8 2xl:px-16 2xl:py-10">
+          <header className="flex shrink-0 items-center">
+            <Link href="/" className="flex min-w-0 items-center gap-3">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white shadow-lg shadow-green-950/10 ring-1 ring-green-900/10">
                 <Image
                   src={Img_Helper.logo.jai_logo}
-                  alt="Jai Export Enterprises"
-                  width={28}
-                  height={28}
-                  className="object-contain"
-                  style={{ width: "auto", height: "auto" }}
+                  alt=""
+                  width={30}
+                  height={20}
+                  className="h-auto w-[30px] object-contain"
+                  style={{ height: "auto" }}
                 />
-              </div>
-              <div>
-                <p className="text-sm font-extrabold uppercase tracking-[0.15em] text-white">
-                  JAI EXPORT ENTERPRISES
-                </p>
-                <p className="text-[11px] text-white/55">File Transfer Service</p>
-              </div>
-            </div>
-
-            <Link
-              href="/"
-              className="flex items-center gap-1.5 rounded-full bg-white/20 px-4 py-2 text-sm font-semibold text-white ring-1 ring-white/20 backdrop-blur-sm transition hover:bg-white/30"
-            >
-              <Home size={14} />
-              Home
-            </Link>
-          </div>
-
-          {/* Center */}
-          <div className="flex min-h-0 flex-1 flex-col justify-center py-5 xl:py-6">
-            <div className="max-w-sm">
-
-              <h1 className="text-3xl font-extrabold leading-tight tracking-tight text-white xl:text-4xl">
-               <span className="flex items-center gap-2">
-                <span className="flex h-8 w-8 items-center justify-center rounded-2xl bg-white/20 ring-1 ring-white/30">
-                <Shield size={20} />
               </span>
-               Secure file sharing,
-               </span>
-                <span className="block text-white/75">Stay together on your network</span>
-              </h1>
-              <p className="mt-4 max-w-xs text-sm leading-6 text-white/65">
-                Sign in to access your files and transfers.
+              <span className="min-w-0">
+                <span className="block truncate text-lg font-extrabold uppercase tracking-[0.12em] text-slate-900">
+                  Jai Export Enterprises
+                </span>
+                <span className="inline-flex items-center gap-2 text-base font-semibold text-[rgb(62,120,1)]">
+                  File Transfer Service
+                  <Sparkles className="h-4 w-4 text-orange-500" />
+                </span>
+              </span>
+            </Link>
+          </header>
+
+          <div className="flex min-h-fit flex-1 flex-col justify-center py-2 xl:py-3 2xl:py-4">
+            <div className="max-w-2xl">
+
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <h1 className="mt-5 text-[2.5rem] font-black leading-[1.03] tracking-[-0.04em] text-slate-950 xl:text-5xl 2xl:text-6xl">
+                  Jai Export
+                  <span className="block bg-gradient-to-r from-[rgb(73,140,1)] via-lime-600 to-orange-500 bg-clip-text text-transparent">
+                    Enterprises
+                  </span>
+                </h1>
+
+
+              </div>
+
+              <p className="mt-4 max-w-xl text-sm leading-6 text-slate-600 xl:text-base xl:leading-7">
+                Easily share and transfer files over the internet with convenience.
+                Enjoy extensive customization options and robust tracking capabilities.
               </p>
-            </div>
-            <div className="mt-5 flex min-h-0 justify-center lg:justify-end">
-              <div className="group relative w-full max-w-[360px] pb-4 pr-5 xl:max-w-[400px]">
-                <div className="absolute -left-3 top-1/2 h-20 w-20 -translate-y-1/2 rounded-full border border-white/25" />
-                <div className="absolute -right-1 top-2 h-10 w-10 rounded-full bg-lime-200/30 blur-sm transition-transform duration-500 group-hover:scale-125" />
-                <div className="absolute bottom-0 right-0 h-[88%] w-[92%] rounded-[2.75rem_1.25rem_3.25rem_1.5rem] bg-white/15 ring-1 ring-white/20" />
 
-                <div className="relative overflow-hidden rounded-[1.25rem_3rem_1.5rem_3.5rem] border-4 border-white/80 bg-white shadow-2xl shadow-black/25 transition-transform duration-500 group-hover:-translate-y-1">
-                  <Image
-                    src={Img_Helper.login.security}
-                    alt="Secure file sharing"
-                    width={400}
-                    height={300}
-                    loading="eager"
-                    sizes="(min-width: 1280px) 400px, (min-width: 1024px) 360px, 0px"
-                    className="h-auto w-full object-contain transition-transform duration-700 group-hover:scale-[1.03]"
-                  />
-                  <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[rgb(73,140,1)]/15 via-transparent to-transparent" />
-                </div>
-
-                <div className="absolute bottom-1 right-1 flex items-center gap-2 rounded-full border border-white/50 bg-white px-3 py-2 text-[11px] font-bold text-[rgb(73,140,1)] shadow-xl shadow-black/15">
-                  <CheckCircle2 size={15} />
-                  Protected access
-                </div>
+              <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs font-semibold text-slate-600 xl:mt-6 xl:text-sm">
+                {["Secure cloud storage", "Role-based access", "Audit tracking"].map(
+                  (item) => (
+                    <span key={item} className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-[rgb(73,140,1)]" />
+                      {item}
+                    </span>
+                  ),
+                )}
               </div>
             </div>
-          </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-between text-xs text-white/40">
-            <span>© 2026 Jai Export Enterprises</span>
-            <div className="flex gap-4">
-              <Link href="/privacy" className="transition hover:text-white/70">Privacy</Link>
-              <Link href="/terms" className="transition hover:text-white/70">Terms</Link>
+            <div className="mt-6 grid grid-cols-3 gap-3 2xl:mt-8 2xl:gap-4">
+              {features.map((feature) => {
+                const Icon = feature.icon;
+                return (
+                  <article
+                    key={feature.title}
+                    className="flex min-w-0 flex-col rounded-2xl border border-white/90 bg-white/75 p-3.5 shadow-md shadow-slate-900/5 backdrop-blur transition hover:-translate-y-1 hover:border-[rgb(73,140,1)]/20 hover:shadow-xl xl:p-4"
+                  >
+                    <span className={`flex h-10 w-10 items-center justify-center rounded-xl ${feature.color}`}>
+                      <Icon className="h-5 w-5" />
+                    </span>
+                    <h2 className="mt-3 text-sm font-bold leading-tight text-slate-900 xl:text-base">
+                      {feature.title}
+                    </h2>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">
+                      {feature.description}
+                    </p>
+                  </article>
+                );
+              })}
             </div>
           </div>
-        </div>
-      </div>
 
-      <div className="login-right-bg flex min-h-dvh w-full min-w-0 flex-1 items-center justify-center overflow-y-auto px-3 py-4 min-[380px]:px-4 sm:px-6 sm:py-6 dark:bg-zinc-950 lg:h-dvh lg:min-h-0 lg:w-1/2 lg:px-8 lg:py-4 xl:px-10">
-        <div className="animate-fade-in mx-auto w-full min-w-0 max-w-md">
+          <footer className="flex shrink-0 items-center justify-between gap-4 text-xs text-slate-500">
+            <span>&copy; 2026 Jai Export Enterprises</span>
+            <nav aria-label="Legal" className="flex items-center gap-4 font-semibold">
+              <a
+                href="https://export.jai-india.com/privacy"
+                className="transition hover:text-[rgb(62,120,1)]"
+              >
+                Privacy
+              </a>
+              <a
+                href="https://export.jai-india.com/terms"
+                className="transition hover:text-[rgb(62,120,1)]"
+              >
+                Terms
+              </a>
+            </nav>
+          </footer>
+        </div>
+      </section>
+
+      <main
+        id="login-form"
+        className="login-right-bg flex min-h-dvh w-full min-w-0 flex-col overflow-y-auto px-3 py-4 min-[380px]:px-4 sm:px-6 sm:py-6 dark:bg-zinc-950 lg:h-dvh lg:min-h-0 lg:px-8 lg:py-4 xl:px-10"
+      >
+        <div className="animate-fade-in mx-auto my-auto w-full min-w-0 max-w-md">
           {/* Card */}
-          <div className="rounded-2xl bg-white p-4 shadow-xl shadow-gray-200/80 ring-1 ring-gray-100 min-[380px]:p-5 sm:rounded-3xl sm:p-6 dark:bg-zinc-900 dark:shadow-none dark:ring-zinc-800 lg:p-7">
+          <div className="rounded-2xl bg-white p-4 shadow-lg shadow-gray-200/70 ring-1 ring-gray-100 min-[380px]:p-5 sm:rounded-3xl sm:p-6 sm:shadow-xl dark:bg-zinc-900 dark:shadow-none dark:ring-zinc-800 lg:p-7">
 
             {/* Mobile logo */}
-            <div className="mb-4 flex min-w-0 items-center gap-3 sm:mb-5 lg:hidden">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[rgb(73,140,1)]/100 shadow-lg shadow-[rgb(73,140,1)]/30">
+            <Link href="/" className="mb-4 flex min-w-0 items-center gap-3 sm:mb-5 lg:hidden">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[rgb(73,140,1)] shadow-lg shadow-[rgb(73,140,1)]/25">
                 <Image
                   src={Img_Helper.logo.jai_logo}
-                  alt="Jai Export Enterprises"
+                  alt=""
                   width={22}
-                  height={22}
-                  className="object-contain"
-                  style={{ width: "auto", height: "auto" }}
+                  height={15}
+                  className="h-auto w-[22px] object-contain"
+                  style={{ height: "auto" }}
                 />
-              </div>
-              <span className="min-w-0 text-sm font-bold text-gray-900 min-[380px]:text-base dark:text-white">Jai Export Enterprises</span>
-            </div>
+              </span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-extrabold text-gray-900 min-[380px]:text-base dark:text-white">
+                  Jai Export Enterprises
+                </span>
+                <span className="block text-[11px] font-medium text-gray-400">
+                  File Transfer Service
+                </span>
+              </span>
+            </Link>
 
             {/* Multi-step indicator */}
             {(step === "forgot" || step === "reset") && (
@@ -369,11 +442,10 @@ export default function LoginPage() {
                 {(["forgot", "reset"] as const).map((s, i) => (
                   <div key={s} className="flex items-center gap-2 flex-1">
                     <div
-                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${
-                        step === s || (s === "forgot" && step === "reset")
-                          ? "bg-[rgb(73,140,1)]/100 text-white shadow-lg shadow-[rgb(73,140,1)]/30"
-                          : "bg-gray-100 text-gray-400 dark:bg-zinc-800 dark:text-gray-500"
-                      }`}
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold transition-all duration-300 ${step === s || (s === "forgot" && step === "reset")
+                        ? "bg-[rgb(73,140,1)]/100 text-white shadow-lg shadow-[rgb(73,140,1)]/30"
+                        : "bg-gray-100 text-gray-400 dark:bg-zinc-800 dark:text-gray-500"
+                        }`}
                     >
                       {s === "forgot" && step === "reset" ? (
                         <Check size={13} strokeWidth={3} />
@@ -398,20 +470,21 @@ export default function LoginPage() {
                 {step === "login"
                   ? "Secure sign-in"
                   : step === "twoFactor"
-                  ? "Two-factor verification"
-                  : step === "forgot"
-                  ? "Account recovery — step 1"
-                  : "Account recovery — step 2"}
+                    ? "Two-factor verification"
+                    : step === "forgot"
+                      ? "Account recovery — step 1"
+                      : "Account recovery — step 2"}
               </span>
 
-              <h1 className="text-2xl font-bold tracking-tight text-gray-900 min-[380px]:text-[1.65rem] sm:text-[1.85rem] dark:text-white">
-                {step === "login" && "Welcome back"}
-                {step === "twoFactor" && "Verify your sign-in"}
-                {step === "forgot" && "Forgot password?"}
-                {step === "reset" && "Create new password"}
-              </h1>
+              {step !== "login" && (
+                <h1 className="text-2xl font-bold tracking-tight text-gray-900 min-[380px]:text-[1.65rem] sm:text-[1.85rem] dark:text-white">
+                  {step === "twoFactor" && "Verify your sign-in"}
+                  {step === "forgot" && "Forgot password?"}
+                  {step === "reset" && "Create new password"}
+                </h1>
+              )}
 
-              <p className="mt-1.5 text-sm leading-relaxed text-gray-500 dark:text-gray-400">
+              <p className={`${step === "login" ? "mt-3" : "mt-1.5"} text-sm leading-relaxed text-gray-500 dark:text-gray-400`}>
                 {step === "login" && "Sign in to access your secure workspace."}
                 {step === "twoFactor" && (
                   <>
@@ -454,6 +527,7 @@ export default function LoginPage() {
                   error={errors.email}
                   leftIcon={<Mail size={16} />}
                   autoComplete="email"
+                  disabled={loading}
                   required
                 />
 
@@ -468,6 +542,7 @@ export default function LoginPage() {
                   error={errors.password}
                   leftIcon={<Lock size={16} />}
                   autoComplete="current-password"
+                  disabled={loading}
                 />
 
                 <div className="flex flex-col items-start gap-3 min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between">
@@ -476,14 +551,14 @@ export default function LoginPage() {
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
+                      disabled={loading}
                       className="sr-only"
                     />
                     <div
-                      className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-200 ${
-                        rememberMe
-                          ? "border-[rgb(73,140,1)] bg-[rgb(73,140,1)]/100 shadow-md shadow-[rgb(73,140,1)]/30"
-                          : "border-gray-300 bg-white dark:border-zinc-600 dark:bg-zinc-800"
-                      }`}
+                      className={`flex h-5 w-5 items-center justify-center rounded-md border-2 transition-all duration-200 ${rememberMe
+                        ? "border-[rgb(73,140,1)] bg-[rgb(73,140,1)]/100 shadow-md shadow-[rgb(73,140,1)]/30"
+                        : "border-gray-300 bg-white dark:border-zinc-600 dark:bg-zinc-800"
+                        }`}
                     >
                       {rememberMe && <Check size={11} className="text-white" strokeWidth={3} />}
                     </div>
@@ -493,6 +568,7 @@ export default function LoginPage() {
                   <button
                     type="button"
                     onClick={() => goToStep("forgot")}
+                    disabled={loading}
                     className="text-sm font-semibold text-[rgb(73,140,1)] transition hover:text-[rgb(73,140,1)]"
                   >
                     Forgot password?
@@ -537,6 +613,7 @@ export default function LoginPage() {
                   value={twoFactorOtp}
                   onChange={setTwoFactorOtp}
                   error={errors.twoFactorOtp}
+                  disabled={loading}
                 />
                 <Button
                   className={GREEN_BUTTON_CLASSES}
@@ -552,6 +629,7 @@ export default function LoginPage() {
                 </Button>
                 <button
                   type="button"
+                  disabled={loading}
                   onClick={() => {
                     setTwoFactorOtp("");
                     goToStep("login");
@@ -564,7 +642,7 @@ export default function LoginPage() {
               </form>
             )}
 
-            {/* â”€â”€ FORGOT PASSWORD â”€â”€ */}
+            {/* Forgot password */}
             {step === "forgot" && (
               <form onSubmit={handleForgotPassword} className="space-y-4 animate-fade-in">
                 <Input
@@ -578,6 +656,7 @@ export default function LoginPage() {
                   error={errors.email}
                   leftIcon={<Mail size={16} />}
                   autoComplete="email"
+                  disabled={loading}
                   required
                 />
 
@@ -597,6 +676,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => goToStep("login")}
+                  disabled={loading}
                   className="flex w-full items-center justify-center gap-2 py-2 text-sm font-medium text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   <ArrowLeft size={15} />
@@ -605,7 +685,7 @@ export default function LoginPage() {
               </form>
             )}
 
-            {/* â”€â”€ RESET PASSWORD â”€â”€ */}
+            {/* Reset password */}
             {step === "reset" && (
               <form onSubmit={handleResetPassword} className="space-y-4 animate-fade-in">
                 <div className="space-y-3">
@@ -616,6 +696,7 @@ export default function LoginPage() {
                     value={resetToken}
                     onChange={setResetToken}
                     error={errors.resetToken}
+                    disabled={loading}
                   />
                 </div>
 
@@ -631,6 +712,7 @@ export default function LoginPage() {
                     error={errors.newPass}
                     leftIcon={<Lock size={16} />}
                     autoComplete="new-password"
+                    disabled={loading}
                   />
 
                   {newPass && strength && (
@@ -639,9 +721,8 @@ export default function LoginPage() {
                         {Array.from({ length: 5 }).map((_, i) => (
                           <div
                             key={i}
-                            className={`h-1 flex-1 rounded-full transition-all duration-300 ${
-                              i < strength.score ? strength.color : "bg-gray-200 dark:bg-zinc-700"
-                            }`}
+                            className={`h-1 flex-1 rounded-full transition-all duration-300 ${i < strength.score ? strength.color : "bg-gray-200 dark:bg-zinc-700"
+                              }`}
                           />
                         ))}
                       </div>
@@ -652,10 +733,10 @@ export default function LoginPage() {
                             strength.score <= 1
                               ? "font-semibold text-red-500"
                               : strength.score <= 2
-                              ? "font-semibold text-yellow-500"
-                              : strength.score <= 3
-                              ? "font-semibold text-blue-500"
-                              : "font-semibold text-emerald-500"
+                                ? "font-semibold text-yellow-500"
+                                : strength.score <= 3
+                                  ? "font-semibold text-blue-500"
+                                  : "font-semibold text-emerald-500"
                           }
                         >
                           {strength.label}
@@ -681,6 +762,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => goToStep("login")}
+                  disabled={loading}
                   className="flex w-full items-center justify-center gap-2 py-2 text-sm font-medium text-gray-500 transition hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
                 >
                   <ArrowLeft size={15} />
@@ -690,8 +772,26 @@ export default function LoginPage() {
             )}
 
           </div>
+
+          <footer className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-2 text-center text-[11px] text-gray-400 lg:hidden">
+            <span className="basis-full min-[430px]:basis-auto">
+              &copy; 2026 Jai Export Enterprises
+            </span>
+            <a
+              href="https://export.jai-india.com/privacy"
+              className="font-semibold transition hover:text-[rgb(62,120,1)]"
+            >
+              Privacy
+            </a>
+            <a
+              href="https://export.jai-india.com/terms"
+              className="font-semibold transition hover:text-[rgb(62,120,1)]"
+            >
+              Terms
+            </a>
+          </footer>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

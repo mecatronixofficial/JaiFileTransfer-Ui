@@ -136,7 +136,6 @@ async function traverseEntry(
    Types
 ────────────────────────────────────────── */
 type SendMethod = "email" | "link" | "qr";
-type ExpiryPreset = "1-day" | "1-week" | "1-month";
 type FileStatus = "idle" | "uploading" | "done" | "error";
 type SendPhase  = "idle" | "uploading" | "creating" | "done";
 
@@ -199,48 +198,44 @@ type UploadResponseData = {
 const FOLDER_TRAVERSAL_CONCURRENCY = 16;
 const SMOOTH_PROGRESS_INTERVAL_MS = 24;
 const MAX_EXPIRY_DAYS = 365;
-const EXPIRY_PRESETS: { value: ExpiryPreset; label: string }[] = [
-  { value: "1-day", label: "1 Day" },
-  { value: "1-week", label: "1 Week" },
-  { value: "1-month", label: "1 Month" },
-];
 
-function toDateTimeLocalValue(date: Date): string {
-  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return local.toISOString().slice(0, 16);
+function toDateInputValue(date: Date): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
-function getPresetExpiryValue(preset: ExpiryPreset): string {
+function getMaxExpiryDateInputValue(): string {
   const date = new Date();
-  if (preset === "1-day") date.setDate(date.getDate() + 1);
-  if (preset === "1-week") date.setDate(date.getDate() + 7);
-  if (preset === "1-month") {
-    const day = date.getDate();
-    date.setDate(1);
-    date.setMonth(date.getMonth() + 1);
-    const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-    date.setDate(Math.min(day, lastDay));
-  }
-  return toDateTimeLocalValue(date);
+  date.setDate(date.getDate() + MAX_EXPIRY_DAYS - 1);
+  return toDateInputValue(date);
+}
+
+function expiryDateToLocalEndOfDay(value: string): Date {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day, 23, 59, 59, 999);
+}
+
+function expiryDateToIso(value: string): string {
+  return expiryDateToLocalEndOfDay(value).toISOString();
 }
 
 function formatExpiry(value: string): string {
-  if (!value) return "Select date & time";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Invalid date & time";
-  return date.toLocaleString("en-US", {
+  if (!value) return "Select date";
+  const date = expiryDateToLocalEndOfDay(value);
+  if (Number.isNaN(date.getTime())) return "Invalid date";
+  return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "short",
     day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
   });
 }
 
 function getExpiryError(value: string, now = Date.now()): string | null {
-  const expiryTime = new Date(value).getTime();
-  if (!value || Number.isNaN(expiryTime)) return "Choose an expiry date and time";
-  if (expiryTime <= now) return "Expiry date and time must be in the future";
+  const expiryTime = expiryDateToLocalEndOfDay(value).getTime();
+  if (!value || Number.isNaN(expiryTime)) return "Choose an expiry date";
+  if (expiryTime <= now) return "Expiry date must be today or later";
   if (expiryTime > now + MAX_EXPIRY_DAYS * 86_400_000) {
     return "Expiry cannot be more than one year from now";
   }
@@ -578,8 +573,7 @@ export default function SendPage() {
   const [passwordEnabled, setPasswordEnabled] = useState(false);
   const [password, setPassword]               = useState("");
   const [showPassword, setShowPassword]       = useState(false);
-  const [expiresAt, setExpiresAt]             = useState(() => getPresetExpiryValue("1-day"));
-  const [expiryPreset, setExpiryPreset]       = useState<ExpiryPreset | null>("1-day");
+  const [expiresAt, setExpiresAt]             = useState("");
   const [sendPhase, setSendPhase]     = useState<SendPhase>("idle");
   const [sentSuccess, setSentSuccess] = useState(false);
   const [completedTransfer, setCompletedTransfer] = useState<CompletedTransferSummary | null>(null);
@@ -906,7 +900,7 @@ export default function SendPage() {
         fileCount:  totalFileCount,
         folderCount: folderCount,
         method,
-        expiresAt: new Date(expiresAt).toISOString(),
+        expiresAt: expiryDateToIso(expiresAt),
         ...(passwordEnabled && password ? { password } : {}),
         ...(method === "email" ? { recipients: emails, ...(subject ? { subject } : {}), ...(message ? { message } : {}) } : {}),
       };
@@ -1019,7 +1013,7 @@ export default function SendPage() {
     setFiles([]); setPreloadedFiles([]); setEmails([]); setEmailInput("");
     setTitle(""); setSubject(""); setMessage("");
     setPasswordEnabled(false); setPassword("");
-    setExpiresAt(getPresetExpiryValue("1-day")); setExpiryPreset("1-day");
+    setExpiresAt("");
     setCompletedTransfer(null);
     setGeneratedLink(""); setSentSuccess(false); setSendPhase("idle");
   }
@@ -1119,7 +1113,7 @@ export default function SendPage() {
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in w-full min-w-0 max-w-full space-y-5 overflow-x-hidden pb-16">
+        <div className="animate-fade-in w-full min-w-0 max-w-full space-y-5 overflow-x-clip pb-16">
 
           {/* ══════════════════════════════════════
               HERO HEADER
@@ -1414,7 +1408,7 @@ export default function SendPage() {
             /* ══════════════════════════════════════
                 COMPOSER
             ══════════════════════════════════════ */
-            <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_320px] xl:grid-cols-[minmax(0,1fr)_340px]">
 
               {/* ── Left column ── */}
               <div className="min-w-0 space-y-4">
@@ -1847,46 +1841,22 @@ export default function SendPage() {
                     {/* Expiry */}
                     <div className="border-t border-gray-100 pt-5 dark:border-zinc-800">
                       <label htmlFor="transfer-expiry" className="mb-2 block text-sm font-semibold text-(--text)">
-                        Link Expiry Date &amp; Time
+                        Link Expiry Date
                       </label>
-                      <div className="mb-3 grid grid-cols-3 gap-2">
-                        {EXPIRY_PRESETS.map((preset) => (
-                          <button
-                            key={preset.value}
-                            type="button"
-                            disabled={isSending}
-                            onClick={() => {
-                              setExpiresAt(getPresetExpiryValue(preset.value));
-                              setExpiryPreset(preset.value);
-                            }}
-                            className={[
-                              "rounded-xl border py-2.5 text-sm font-semibold transition-all duration-150 disabled:opacity-50",
-                              expiryPreset === preset.value
-                                ? "border-orange-400 bg-orange-500 text-white shadow-sm shadow-orange-500/25"
-                                : "border-gray-200 bg-gray-50 text-(--text-muted) hover:border-orange-300 hover:bg-orange-50/60 dark:border-zinc-700 dark:bg-zinc-800",
-                            ].join(" ")}
-                          >
-                            {preset.label}
-                          </button>
-                        ))}
-                      </div>
                       <input
                         id="transfer-expiry"
-                        type="datetime-local"
+                        type="date"
                         value={expiresAt}
-                        min={toDateTimeLocalValue(new Date(Date.now() + 60_000))}
-                        max={toDateTimeLocalValue(new Date(Date.now() + MAX_EXPIRY_DAYS * 86_400_000))}
+                        min={toDateInputValue(new Date())}
+                        max={getMaxExpiryDateInputValue()}
                         disabled={isSending}
-                        onChange={(event) => {
-                          setExpiresAt(event.target.value);
-                          setExpiryPreset(null);
-                        }}
+                        onChange={(event) => setExpiresAt(event.target.value)}
                         suppressHydrationWarning
                         aria-invalid={Boolean(expiryError)}
                         className={`${inputCls("orange")} ${expiryError ? "border-red-300 focus:border-red-400 focus:ring-red-500/10 dark:border-red-800" : ""}`}
                       />
                       <p className={`mt-2 text-xs ${expiryError ? "text-red-500" : "text-(--text-muted)"}`}>
-                        {expiryError ?? "Choose the exact expiry in your local time, up to one year from now."}
+                        {expiryError ?? "The link remains available until the end of the selected date."}
                       </p>
                     </div>
 
@@ -1941,10 +1911,10 @@ export default function SendPage() {
               </div>
 
               {/* ── Right column ── */}
-              <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+              <div className="flex flex-col gap-4 lg:self-stretch">
 
                 {/* Transfer summary card */}
-                <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                <div className="order-2 overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm lg:sticky lg:top-0 lg:z-10 dark:border-zinc-800 dark:bg-zinc-900">
                   <div className="h-1 w-full bg-linear-to-r from-orange-500 via-amber-400 to-orange-400" />
                   <div className="p-5">
                     <div className="mb-4 flex items-center gap-2">
@@ -2027,7 +1997,7 @@ export default function SendPage() {
                 </div>
 
                 {/* Pro tips */}
-                <div className="rounded-2xl border border-orange-100/80 bg-linear-to-b from-orange-50/60 to-amber-50/30 p-5 dark:border-orange-900/20 dark:from-orange-950/20 dark:to-zinc-900/0">
+                <div className="order-1 rounded-2xl border border-orange-100/80 bg-linear-to-b from-orange-50/60 to-amber-50/30 p-5 dark:border-orange-900/20 dark:from-orange-950/20 dark:to-zinc-900/0">
                   <div className="mb-3 flex items-center gap-2">
                     <Sparkles size={13} className="text-orange-500" />
                     <span className="text-xs font-bold uppercase tracking-widest text-orange-600 dark:text-orange-400">Tips</span>
