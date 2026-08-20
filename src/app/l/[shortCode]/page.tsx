@@ -255,7 +255,7 @@ export default function PublicLinkPage() {
           </div>
           <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">Link Unavailable</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{error}</p>
-          <p className="mt-6 text-xs text-gray-400">Powered by Jai Export Enterprises · Cloudflare R2</p>
+          <p className="mt-6 text-xs text-gray-400">Powered by <span className="company-name">Jai Export Enterprises</span> · Cloudflare R2</p>
         </div>
       </div>
     );
@@ -270,7 +270,7 @@ export default function PublicLinkPage() {
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/30">
               <Send size={20} />
             </div>
-            <p className="text-xs font-bold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
+            <p className="company-name text-xs font-bold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
             <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">Secure File Share</p>
           </div>
 
@@ -335,7 +335,7 @@ export default function PublicLinkPage() {
             <Send size={18} />
           </div>
           <div>
-            <p className="text-sm font-extrabold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
+            <p className="company-name text-sm font-extrabold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
             <p className="text-[11px] text-gray-400 dark:text-gray-500">Secure File Share · Cloudflare R2</p>
           </div>
         </div>
@@ -554,7 +554,7 @@ export default function PublicLinkPage() {
           </span>
           <span>·</span>
           <span className="flex items-center gap-1">
-            <Sparkles size={11} className="text-orange-400" /> Jai Export Enterprises
+            <Sparkles size={11} className="text-orange-400" /> <span className="company-name">Jai Export Enterprises</span>
           </span>
         </div>
       </div>

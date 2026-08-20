@@ -54,7 +54,7 @@ function BrandHeader() {
   return (
     <div className="flex w-full items-center justify-between gap-4 rounded-2xl border border-orange-100/80 bg-white/75 px-4 py-3 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/75 sm:px-5 sm:py-4">
       <div className="min-w-0 text-left">
-        <p className="truncate text-sm font-extrabold uppercase tracking-[0.16em] text-orange-500 sm:text-base sm:tracking-[0.2em]">
+        <p className="company-name truncate text-sm font-extrabold uppercase tracking-[0.16em] text-orange-500 sm:text-base sm:tracking-[0.2em]">
           Jai Export Enterprises
         </p>
         <p className="mt-0.5 truncate text-[10px] text-gray-400 dark:text-gray-500 sm:text-xs">
@@ -475,7 +475,7 @@ export default function PublicTransferPage() {
           </div>
           <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">Transfer Unavailable</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{error}</p>
-          <p className="mt-6 text-xs text-gray-400">Powered by Jai Export Enterprises · Cloudflare R2</p>
+          <p className="mt-6 text-xs text-gray-400">Powered by <span className="company-name">Jai Export Enterprises</span> · Cloudflare R2</p>
         </div>
       </div>
     );
@@ -739,7 +739,7 @@ export default function PublicTransferPage() {
           </span>
           <span className="hidden sm:inline">·</span>
           <span className="flex items-center gap-1">
-            <Sparkles size={11} className="text-orange-400" /> Jai Export Enterprises
+            <Sparkles size={11} className="text-orange-400" /> <span className="company-name">Jai Export Enterprises</span>
           </span>
         </div>
 

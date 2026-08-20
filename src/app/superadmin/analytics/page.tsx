@@ -272,7 +272,7 @@ export default function AnalyticsPage() {
                 <BarChart3 size={22} className="text-orange-500" /> Platform Analytics
               </h1>
               <p className="mt-0.5 text-sm text-gray-500 dark:text-gray-400">
-                Storage, transfers, shares, users, and audit signals for Jai Export Enterprises
+                Storage, transfers, shares, users, and audit signals for <span className="company-name">Jai Export Enterprises</span>
               </p>
             </div>
             <button type="button" onClick={() => load(true)} disabled={loading} aria-label="Refresh analytics"

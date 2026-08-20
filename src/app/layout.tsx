@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Libre_Baskerville } from "next/font/google";
 import "./globals.css";
 import Providers from "./providers";
 import {
@@ -9,6 +10,12 @@ import {
   SITE_URL,
   SITE_URL_STRING,
 } from "@/lib/site-config";
+
+const libreBaskerville = Libre_Baskerville({
+  subsets: ["latin"],
+  weight: "variable",
+  variable: "--font-page-title",
+});
 
 export const metadata: Metadata = {
   metadataBase: SITE_URL,
@@ -99,7 +106,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className="light"
+      className={`${libreBaskerville.variable} light`}
       data-scroll-behavior="smooth"
       style={{ colorScheme: "light" }}
       suppressHydrationWarning

@@ -403,7 +403,7 @@ export default function AdminActivityPage() {
                   {isAuditLogs ? "Audit Logs" : "Activity Log"}
                 </h1>
                 <p className="mt-1 text-sm text-(--text-muted)">
-                  Jai Export Enterprises workspace actions across files, folders, transfers, links, QR shares, email delivery, and users
+                  <span className="company-name">Jai Export Enterprises</span> workspace actions across files, folders, transfers, links, QR shares, email delivery, and users
                 </p>
               </div>
             </div>

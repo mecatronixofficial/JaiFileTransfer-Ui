@@ -310,24 +310,24 @@ export default function LoginPage() {
         <div className="scrollbar-hide relative z-10 flex h-full min-h-0 w-full flex-col overflow-y-auto px-7 py-6 xl:px-12 xl:py-8 2xl:px-16 2xl:py-10">
           <header className="flex shrink-0 items-center">
             <Link href="/" className="flex min-w-0 items-center gap-3">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white shadow-lg shadow-green-950/10 ring-1 ring-green-900/10">
-                <Image
-                  src={Img_Helper.logo.jai_logo}
-                  alt=""
-                  width={30}
-                  height={20}
-                  className="h-auto w-[30px] object-contain"
-                  style={{ height: "auto" }}
-                />
-              </span>
               <span className="min-w-0">
-                <span className="block truncate text-lg font-extrabold uppercase tracking-[0.12em] text-slate-900">
+                <span className="company-name block truncate text-lg font-extrabold uppercase tracking-[0.12em] text-black">
                   Jai Export Enterprises
                 </span>
                 <span className="inline-flex items-center gap-2 text-base font-semibold text-[rgb(62,120,1)]">
                   File Transfer Service
                   <Sparkles className="h-4 w-4 text-orange-500" />
                 </span>
+              </span>
+              <span className="flex h-16 w-16 shrink-0 items-center justify-center ">
+                <Image
+                  src={Img_Helper.logo.jai_logo}
+                  alt=""
+                  width={50}
+                  height={34}
+                  className="h-auto w-[50px] object-contain"
+                  style={{ height: "auto" }}
+                />
               </span>
             </Link>
           </header>
@@ -336,14 +336,14 @@ export default function LoginPage() {
             <div className="max-w-2xl">
 
               <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="mt-5 text-[2.5rem] font-black leading-[1.03] tracking-[-0.04em] text-slate-950 xl:text-5xl 2xl:text-6xl">
-                  Jai Export
-                  <span className="block bg-gradient-to-r from-[rgb(73,140,1)] via-lime-600 to-orange-500 bg-clip-text text-transparent">
-                    Enterprises
+                <h1 className="company-name mt-5 text-[2.5rem] leading-[1.03] tracking-[0.01em] text-slate-950 font-bold">
+                  <span className="block bg-gradient-to-r from-[rgb(221,155,2)] via-orange-500 to-orange-500 bg-clip-text text-4xl text-transparent">
+                    JAI EXPORT
+                  </span>
+                  <span className="block bg-gradient-to-r from-[rgb(73,140,1)] via-lime-600 to-lime-500 bg-clip-text text-3xl text-transparent">
+                    ENTERPRISES
                   </span>
                 </h1>
-
-
               </div>
 
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-600 xl:text-base xl:leading-7">
@@ -387,7 +387,7 @@ export default function LoginPage() {
           </div>
 
           <footer className="flex shrink-0 items-center justify-between gap-4 text-xs text-slate-500">
-            <span>&copy; 2026 Jai Export Enterprises</span>
+            <span>&copy; 2026 <span className="company-name">Jai Export Enterprises</span></span>
             <nav aria-label="Legal" className="flex items-center gap-4 font-semibold">
               <a
                 href="https://export.jai-india.com/privacy"
@@ -427,7 +427,7 @@ export default function LoginPage() {
                 />
               </span>
               <span className="min-w-0">
-                <span className="block truncate text-sm font-extrabold text-gray-900 min-[380px]:text-base dark:text-white">
+                <span className="company-name block truncate text-sm font-extrabold text-gray-900 min-[380px]:text-base dark:text-white">
                   Jai Export Enterprises
                 </span>
                 <span className="block text-[11px] font-medium text-gray-400">
@@ -775,7 +775,7 @@ export default function LoginPage() {
 
           <footer className="mt-5 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-2 text-center text-[11px] text-gray-400 lg:hidden">
             <span className="basis-full min-[430px]:basis-auto">
-              &copy; 2026 Jai Export Enterprises
+              &copy; 2026 <span className="company-name">Jai Export Enterprises</span>
             </span>
             <a
               href="https://export.jai-india.com/privacy"

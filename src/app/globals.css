@@ -118,7 +118,14 @@
     -webkit-font-smoothing: antialiased;
   }
 
-  h1,
+  h1 {
+    font-family: var(--font-page-title), Georgia, serif;
+  }
+
+  .company-name {
+    font-family: var(--font-page-title), Georgia, serif;
+  }
+
   h2,
   h3,
   h4,

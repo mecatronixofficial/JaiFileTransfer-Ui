@@ -480,7 +480,7 @@ export default function Header({
               {routeContext.icon}
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-[12px] font-bold leading-none text-gray-900 dark:text-white">
+              <span className={`block truncate text-[12px] font-bold leading-none text-gray-900 dark:text-white ${routeContext.title === "Jai Export Enterprises" ? "company-name" : ""}`}>
                 {routeContext.title}
               </span>
               <span className="mt-0.5 block truncate text-[10px] text-gray-400 dark:text-gray-500">
@@ -888,7 +888,7 @@ export default function Header({
                     </span>
                   ))}
                 </div>
-                <span className="text-[10px] text-gray-400 dark:text-gray-500">Jai Export Enterprises</span>
+                <span className="company-name text-[10px] text-gray-400 dark:text-gray-500">Jai Export Enterprises</span>
               </div>
             </div>
           </div>

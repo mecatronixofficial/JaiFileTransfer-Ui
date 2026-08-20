@@ -495,7 +495,7 @@ export default function ContactPage() {
           FOOTER STRIP
       ══════════════════════════════════════ */}
       <div className="bg-orange-600 px-6 py-6 text-center text-sm text-white/70">
-        © 2026 Jai Export Enterprises ·{" "}
+        © 2026 <span className="company-name">Jai Export Enterprises</span> ·{" "}
         <Link href="/privacy" className="transition hover:text-white">
           Privacy
         </Link>

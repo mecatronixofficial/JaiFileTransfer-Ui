@@ -745,7 +745,7 @@ function Sidebar({
                 />
               </div>
               <div className="min-w-0">
-                <p className="truncate text-[13px] font-bold leading-none text-gray-900 dark:text-white">
+                <p className="company-name truncate text-[13px] font-bold leading-none text-gray-900 dark:text-white">
                   Jai Export Enterprises
                 </p>
                 <p className="mt-0.5 truncate text-[10.5px] font-medium text-gray-400 dark:text-gray-500">

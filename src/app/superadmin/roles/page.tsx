@@ -182,7 +182,7 @@ export default function RolesPage() {
                 Role Manager
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-gray-500 dark:text-gray-400">
-                Review the fixed access model for users, admins, and superadmins across Jai Export Enterprises.
+                Review the fixed access model for users, admins, and superadmins across <span className="company-name">Jai Export Enterprises</span>.
               </p>
             </div>
             <Button
