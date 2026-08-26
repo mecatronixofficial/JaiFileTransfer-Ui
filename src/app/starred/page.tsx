@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   CalendarDays,
@@ -38,6 +38,7 @@ import {
 import { handleApiError } from "@/lib/error-handler";
 import { showToast } from "@/lib/toast";
 import Button from "@/components/ui/Button";
+import FloatingActionMenu from "@/components/ui/FloatingActionMenu";
 
 type ViewMode = "grid" | "list";
 type SortField = "name" | "size" | "createdAt";
@@ -83,13 +84,6 @@ export default function StarredPage() {
   useEffect(() => {
     void Promise.resolve().then(() => load());
   }, [load]);
-
-  useEffect(() => {
-    if (!menuOpen) return;
-    const fn = () => setMenuOpen(null);
-    document.addEventListener("click", fn);
-    return () => document.removeEventListener("click", fn);
-  }, [menuOpen]);
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
@@ -420,6 +414,8 @@ function StarredTransferTable({
   setMenuOpen: (id: string | null) => void;
   onUnstar: (transfer: Transfer) => void;
 }) {
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
       <div className="overflow-x-auto">
@@ -483,25 +479,36 @@ function StarredTransferTable({
                       >
                         <Star size={15} className="fill-yellow-400" />
                       </button>
-                      <div className="relative">
+                      <div>
                         <button
                           type="button"
                           title="More options"
                           aria-label="More options"
+                          aria-haspopup="menu"
+                          aria-expanded={menuOpen === transfer.id}
+                          ref={menuOpen === transfer.id ? menuButtonRef : null}
                           onClick={(event) => {
                             event.stopPropagation();
-                            setMenuOpen(menuOpen === transfer.id ? null : transfer.id);
+                            if (menuOpen === transfer.id) {
+                              setMenuOpen(null);
+                            } else {
+                              menuButtonRef.current = event.currentTarget;
+                              setMenuOpen(transfer.id);
+                            }
                           }}
                           className="flex h-8 w-8 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 dark:hover:bg-zinc-800"
                         >
                           <MoreHorizontal size={14} />
                         </button>
-                        {menuOpen === transfer.id && (
-                          <div
-                            className="absolute right-0 top-9 z-20 min-w-40 rounded-xl border border-gray-200 bg-white py-1.5 shadow-xl dark:border-zinc-700 dark:bg-zinc-900"
-                            onClick={(event) => event.stopPropagation()}
-                          >
+                        <FloatingActionMenu
+                          open={menuOpen === transfer.id}
+                          anchorRef={menuButtonRef}
+                          onClose={() => setMenuOpen(null)}
+                          width={176}
+                          className="py-1.5"
+                        >
                             <Link
+                              role="menuitem"
                               href={`/transfers/${transfer.id}`}
                               onClick={() => setMenuOpen(null)}
                               className="flex w-full items-center gap-2.5 px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 dark:text-gray-300 dark:hover:bg-zinc-800"
@@ -511,13 +518,13 @@ function StarredTransferTable({
                             <div className="my-1 border-t border-gray-100 dark:border-zinc-800" />
                             <button
                               type="button"
+                              role="menuitem"
                               onClick={() => { onUnstar(transfer); setMenuOpen(null); }}
                               className="flex w-full items-center gap-2.5 px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-950/30"
                             >
                               <X size={13} /> Remove from starred
                             </button>
-                          </div>
-                        )}
+                        </FloatingActionMenu>
                       </div>
                     </div>
                   </td>

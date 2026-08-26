@@ -8,6 +8,7 @@ import axios, {
 } from "axios";
 import { UPLOAD_LIMITS } from "@/helper/data_helper";
 import { notifyAppDataChanged } from "@/lib/app-events";
+import { getUploadBlockReason, resolveUploadContentType } from "@/lib/file-types";
 
 /* =========================
    CONFIG
@@ -245,64 +246,6 @@ function getPartUploadErrorMessage(error: unknown, partNumber: number): string {
   }
 
   return (error as Error)?.message || `Upload part ${partNumber} failed`;
-}
-
-const MIME_BY_EXTENSION: Record<string, string> = {
-  jpg: "image/jpeg",
-  jpeg: "image/jpeg",
-  png: "image/png",
-  gif: "image/gif",
-  webp: "image/webp",
-  svg: "image/svg+xml",
-  bmp: "image/bmp",
-  tif: "image/tiff",
-  tiff: "image/tiff",
-  avif: "image/avif",
-  heic: "image/heic",
-  heif: "image/heif",
-  mp4: "video/mp4",
-  m4v: "video/x-m4v",
-  mov: "video/quicktime",
-  webm: "video/webm",
-  mkv: "video/x-matroska",
-  avi: "video/x-msvideo",
-  mpeg: "video/mpeg",
-  mpg: "video/mpeg",
-  ts: "video/mp2t",
-  "3gp": "video/3gpp",
-  "3g2": "video/3gpp2",
-  mp3: "audio/mpeg",
-  wav: "audio/wav",
-  m4a: "audio/mp4",
-  aac: "audio/aac",
-  ogg: "audio/ogg",
-  flac: "audio/flac",
-  pdf: "application/pdf",
-  doc: "application/msword",
-  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-  xls: "application/vnd.ms-excel",
-  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-  csv: "text/csv",
-  ppt: "application/vnd.ms-powerpoint",
-  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-  txt: "text/plain",
-  rtf: "application/rtf",
-  odt: "application/vnd.oasis.opendocument.text",
-  ods: "application/vnd.oasis.opendocument.spreadsheet",
-  odp: "application/vnd.oasis.opendocument.presentation",
-  zip: "application/zip",
-  rar: "application/vnd.rar",
-  "7z": "application/x-7z-compressed",
-};
-
-function resolveUploadContentType(file: File): string {
-  const browserType = file.type?.trim();
-  if (browserType && browserType !== "application/octet-stream") {
-    return browserType;
-  }
-
-  const extension = file.name.split(".").pop()?.toLowerCase();
-  return (extension && MIME_BY_EXTENSION[extension]) || browserType || "application/octet-stream";
 }
 
 /* =========================
@@ -750,6 +693,9 @@ export const uploadApi = {
     onProgress?: UploadProgressCallback,
     signal?: AbortSignal,
   ): Promise<UploadApiResponse> => {
+    const blockedReason = getUploadBlockReason(file.name);
+    if (blockedReason) throw new Error(blockedReason);
+
     if (file.size > UPLOAD_LIMITS.MAX_FILE_BYTES) {
       throw new Error(`File is larger than ${Math.round(UPLOAD_LIMITS.MAX_FILE_BYTES / 1024 ** 3)} GB`);
     }
@@ -758,8 +704,12 @@ export const uploadApi = {
       return uploadApi.uploadMultipartFile(file, folderId, onProgress, signal);
     }
 
+    const contentType = resolveUploadContentType(file);
+    const uploadBody = file.type === contentType
+      ? file
+      : file.slice(0, file.size, contentType);
     const formData = new FormData();
-    formData.append("file", file);
+    formData.append("file", uploadBody, file.name);
     if (folderId) formData.append("folderId", folderId);
 
     // POST /upload/file — server-side upload to R2 (no browser CORS needed).

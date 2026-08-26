@@ -820,7 +820,7 @@ export default function UploadModal({
                 {isDragging ? "Drop files or folders here" : "Upload files or folders"}
               </p>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Drag &amp; drop, or browse · Any type · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
+                Drag &amp; drop, or browse · Company file formats · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
               </p>
               <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                 {transferMode

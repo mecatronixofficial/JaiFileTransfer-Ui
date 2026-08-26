@@ -13,6 +13,7 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import AuthGuard from "@/components/auth/AuthGuard";
 import { Spinner } from "@/components/ui";
 import Button from "@/components/ui/Button";
+import FloatingActionMenu from "@/components/ui/FloatingActionMenu";
 import { formatBytes, formatRelative } from "@/lib/utils";
 import {
   getTransferFileCount,
@@ -99,16 +100,7 @@ export default function TransfersPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   /* ── Close dropdown on outside click ── */
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => {
-    if (!menuOpen) return;
-    const fn = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node))
-        setMenuOpen(null);
-    };
-    document.addEventListener("mousedown", fn);
-    return () => document.removeEventListener("mousedown", fn);
-  }, [menuOpen]);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
 
   /* ── Load transfers by tab ── */
   const load = useCallback(async (tab: ViewTab = "sent") => {
@@ -506,7 +498,7 @@ export default function TransfersPage() {
 
                               {/* Actions */}
                               <td className="px-5 py-3.5">
-                                <div className="flex items-center justify-center gap-0.5" ref={menuOpen === t.id ? menuRef : null}>
+                                <div className="flex items-center justify-center gap-0.5">
 
                                   {/* Copy link */}
                                   <button type="button" title="Copy link"
@@ -524,9 +516,18 @@ export default function TransfersPage() {
                                   </Link>
 
                                   {/* Overflow menu */}
-                                  <div className="relative">
-                                    <button type="button" aria-label="More actions"
-                                      onClick={(e) => { e.stopPropagation(); setMenuOpen(menuOpen === t.id ? null : t.id); }}
+                                  <div>
+                                    <button type="button" aria-label="More actions" aria-haspopup="menu" aria-expanded={menuOpen === t.id}
+                                      ref={menuOpen === t.id ? menuButtonRef : null}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (menuOpen === t.id) {
+                                          setMenuOpen(null);
+                                        } else {
+                                          menuButtonRef.current = e.currentTarget;
+                                          setMenuOpen(t.id);
+                                        }
+                                      }}
                                       className={[
                                         "flex h-7 w-7 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:hover:bg-zinc-800",
                                         isActing ? "opacity-50 pointer-events-none" : "",
@@ -534,17 +535,20 @@ export default function TransfersPage() {
                                       {isActing ? <Spinner size={13} /> : <MoreHorizontal size={13} />}
                                     </button>
 
-                                    {menuOpen === t.id && (
-                                      <div className="absolute right-0 top-8 z-30 w-48 overflow-hidden rounded-xl border border-gray-200 bg-white py-1 shadow-xl dark:border-zinc-700 dark:bg-zinc-900">
-                                        <button type="button" onClick={() => handleCopy(t)}
+                                    <FloatingActionMenu
+                                      open={menuOpen === t.id}
+                                      anchorRef={menuButtonRef}
+                                      onClose={() => setMenuOpen(null)}
+                                    >
+                                        <button type="button" role="menuitem" onClick={() => { handleCopy(t); setMenuOpen(null); }}
                                           className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-(--text-muted) transition-colors hover:bg-gray-50 hover:text-(--text) dark:hover:bg-zinc-800">
                                           <Copy size={12} /> Copy Link
                                         </button>
-                                        <a href={getLink(t)} target="_blank" rel="noopener noreferrer"
+                                        <a role="menuitem" href={getLink(t)} target="_blank" rel="noopener noreferrer" onClick={() => setMenuOpen(null)}
                                           className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-(--text-muted) transition-colors hover:bg-gray-50 hover:text-(--text) dark:hover:bg-zinc-800">
                                           <ExternalLink size={12} /> Open Link
                                         </a>
-                                        <button type="button" onClick={() => handleStar(t)}
+                                        <button type="button" role="menuitem" onClick={() => handleStar(t)}
                                           className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-(--text-muted) transition-colors hover:bg-gray-50 hover:text-(--text) dark:hover:bg-zinc-800">
                                           <Star size={12} className={isStarred ? "fill-amber-400 text-amber-400" : ""} />
                                           {isStarred ? "Unstar" : "Star"}
@@ -553,29 +557,28 @@ export default function TransfersPage() {
                                         <div className="my-1 border-t border-gray-100 dark:border-zinc-800" />
 
                                         {t.status === "active" && (
-                                          <button type="button" onClick={() => handleDisable(t)}
+                                          <button type="button" role="menuitem" onClick={() => handleDisable(t)}
                                             className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-(--text-muted) transition-colors hover:bg-gray-50 hover:text-(--text) dark:hover:bg-zinc-800">
                                             <ToggleLeft size={12} /> Disable Link
                                           </button>
                                         )}
                                         {t.status === "disabled" && (
-                                          <button type="button" onClick={() => handleEnable(t)}
+                                          <button type="button" role="menuitem" onClick={() => handleEnable(t)}
                                             className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-(--text-muted) transition-colors hover:bg-gray-50 hover:text-(--text) dark:hover:bg-zinc-800">
                                             <ToggleRight size={12} /> Enable Link
                                           </button>
                                         )}
-                                        <button type="button" onClick={() => handleExtend(t, 7)}
+                                        <button type="button" role="menuitem" onClick={() => handleExtend(t, 7)}
                                           className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-(--text-muted) transition-colors hover:bg-gray-50 hover:text-(--text) dark:hover:bg-zinc-800">
                                           <RefreshCw size={12} /> Extend 7 Days
                                         </button>
 
                                         <div className="my-1 border-t border-gray-100 dark:border-zinc-800" />
-                                        <button type="button" onClick={() => handleDelete(t)}
+                                        <button type="button" role="menuitem" onClick={() => handleDelete(t)}
                                           className="flex w-full items-center gap-2.5 px-3.5 py-2 text-xs text-red-500 transition-colors hover:bg-red-50 dark:hover:bg-red-900/20">
                                           <Trash2 size={12} /> Delete Transfer
                                         </button>
-                                      </div>
-                                    )}
+                                    </FloatingActionMenu>
                                   </div>
                                 </div>
                               </td>

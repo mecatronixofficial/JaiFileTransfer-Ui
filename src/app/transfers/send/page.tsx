@@ -544,6 +544,7 @@ export default function SendPage() {
   /** Files already in storage, pre-selected from the Files page */
   const [preloadedFiles, setPreloadedFiles] = useState<PreloadedFile[]>([]);
   const [isDragging, setIsDragging] = useState(false);
+  const pageTopRef     = useRef<HTMLDivElement>(null);
   const fileInputRef   = useRef<HTMLInputElement>(null);
   const folderInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -690,10 +691,6 @@ export default function SendPage() {
           relativePath,
         })),
       ];
-      /* Auto-suggest a title from the first file when none has been set */
-      if (prev.length === 0 && accepted.length > 0) {
-        setTitle((t) => t || accepted[0].file.name.replace(/\.[^/.]+$/, ""));
-      }
       return next;
     });
   }
@@ -807,6 +804,7 @@ export default function SendPage() {
 
   const canSend = () => {
     if (files.length === 0 && preloadedFiles.length === 0) return false;
+    if (!title.trim()) return false;
     if (method === "email" && emails.length === 0) return false;
     if (passwordEnabled && !password) return false;
     if (getExpiryError(expiresAt)) return false;
@@ -866,10 +864,7 @@ export default function SendPage() {
       }
       setSendPhase("creating");
       const uploaded = results as { key: string; fileId: string; uploadSessionId?: string }[];
-      const resolvedTitle = title.trim()
-        || files[0]?.file.name.replace(/\.[^/.]+$/, "")
-        || preloadedFiles[0]?.name.replace(/\.[^/.]+$/, "")
-        || "Transfer";
+      const resolvedTitle = title.trim();
 
       /* Build fileId → relativePath map for locally-uploaded folder files */
       const relativePaths: Record<string, string> = {};
@@ -1018,14 +1013,18 @@ export default function SendPage() {
     setGeneratedLink(""); setSentSuccess(false); setSendPhase("idle");
   }
 
+  function handleSendMoreFiles() {
+    resetForm();
+    requestAnimationFrame(() => {
+      pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
   function handlePickerConfirm(picked: PickedFile[]) {
     const existingIds = new Set(preloadedFiles.map((f) => f.id));
     const newOnes = picked.filter((f) => !existingIds.has(f.id));
     if (newOnes.length === 0) return;
     setPreloadedFiles((prev) => [...prev, ...newOnes]);
-    if (preloadedFiles.length === 0 && files.length === 0 && newOnes.length > 0) {
-      setTitle((t) => t || newOnes[0].name.replace(/\.[^/.]+$/, ""));
-    }
   }
 
   /* ── Derived ── */
@@ -1113,7 +1112,7 @@ export default function SendPage() {
   return (
     <AuthGuard>
       <DashboardLayout>
-        <div className="animate-fade-in w-full min-w-0 max-w-full space-y-5 overflow-x-clip pb-16">
+        <div ref={pageTopRef} className="animate-fade-in w-full min-w-0 max-w-full space-y-5 overflow-x-clip pb-16">
 
           {/* ══════════════════════════════════════
               HERO HEADER
@@ -1397,7 +1396,7 @@ export default function SendPage() {
                     <p className="text-xs text-(--text-muted)">
                       Your transfer is saved and ready from the transfers view.
                     </p>
-                    <Button variant="secondary" onClick={resetForm} leftIcon={<RefreshCw size={14} />} rounded="full">
+                    <Button variant="secondary" onClick={handleSendMoreFiles} leftIcon={<RefreshCw size={14} />} rounded="full">
                       Send More Files
                     </Button>
                   </div>
@@ -1486,7 +1485,7 @@ export default function SendPage() {
                               {isDragging ? "Drop files or folders here" : "Drag & drop files or folders"}
                             </p>
                             <p className="mt-1 text-sm text-(--text-muted)">
-                              Any file type supported · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
+                              Company file formats supported · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1764,11 +1763,12 @@ export default function SendPage() {
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         disabled={isSending}
+                        required
                         placeholder="e.g. Project Assets, Vacation Photos…"
                         className={inputCls("orange")}
                       />
                       <p className="mt-1.5 flex items-center gap-1 text-[11px] text-(--text-muted)">
-                        <Info size={9} /> Shown on the download page — auto-filled from first file
+                        <Info size={9} /> Enter a title to show on the download page
                       </p>
                     </div>
 
@@ -1977,7 +1977,8 @@ export default function SendPage() {
                         <div className="flex items-start gap-2 rounded-xl border border-orange-100 bg-orange-50/80 p-3 dark:border-orange-900/20 dark:bg-orange-900/10">
                           <AlertCircle size={12} className="mt-0.5 shrink-0 text-orange-500" />
                           <p className="text-xs text-orange-600 dark:text-orange-400">
-                            {method === "email" && emails.length === 0 ? "Add at least one email address"
+                            {!title.trim() ? "Enter a transfer title"
+                              : method === "email" && emails.length === 0 ? "Add at least one email address"
                               : passwordEnabled && !password ? "Enter a password or disable protection"
                               : expiryError ?? "Fill in the required fields above"}
                           </p>
