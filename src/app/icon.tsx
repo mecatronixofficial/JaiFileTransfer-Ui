@@ -16,20 +16,33 @@ export default async function Icon() {
     <div
       style={{
         alignItems: "center",
-        background: "#ffffff",
+        background: "transparent",
         display: "flex",
         height: "100%",
         justifyContent: "center",
         width: "100%",
       }}
     >
-      <img
-        alt=""
-        height={36}
-        src={`data:image/png;base64,${logo}`}
-        style={{ objectFit: "contain" }}
-        width={52}
-      />
+      <div
+        style={{
+          alignItems: "center",
+          background: "#ffffff",
+          border: "1px solid #e5e7eb",
+          borderRadius: "14px",
+          display: "flex",
+          height: "56px",
+          justifyContent: "center",
+          width: "56px",
+        }}
+      >
+        <img
+          alt=""
+          height={30}
+          src={`data:image/png;base64,${logo}`}
+          style={{ objectFit: "contain" }}
+          width={44}
+        />
+      </div>
     </div>,
     size,
   );

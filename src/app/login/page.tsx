@@ -308,25 +308,32 @@ export default function LoginPage() {
         <div className="pointer-events-none absolute -bottom-40 -right-28 h-[30rem] w-[30rem] rounded-full bg-orange-300/20 blur-3xl" />
 
         <div className="scrollbar-hide relative z-10 flex h-full min-h-0 w-full flex-col overflow-y-auto px-7 py-6 xl:px-12 xl:py-8 2xl:px-16 2xl:py-10">
-          <header className="flex shrink-0 items-center">
-            <Link href="/" className="flex min-w-0 items-center gap-3">
+          <header className="flex h-auto w-full shrink-0 items-center">
+            <Link
+              href="/"
+              aria-label="Jai Export Enterprises home"
+              className="flex w-full min-w-0 items-center justify-between gap-4 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgb(73,140,1)]/40"
+            >
               <span className="min-w-0">
-                <span className="company-name block truncate text-lg font-extrabold uppercase tracking-[0.12em] text-black">
+                <span className="company-name block truncate text-lg font-extrabold uppercase tracking-[0.12em] text-slate-950">
                   Jai Export Enterprises
                 </span>
-                <span className="inline-flex items-center gap-2 text-base font-semibold text-[rgb(62,120,1)]">
+                <span className="mt-0.5 inline-flex items-center gap-2 text-base font-semibold text-[rgb(62,120,1)]">
                   File Transfer Service
-                  <Sparkles className="h-4 w-4 text-orange-500" />
+                  <Sparkles
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0 text-orange-500"
+                  />
                 </span>
               </span>
-              <span className="flex h-16 w-16 shrink-0 items-center justify-center ">
+              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white p-2 shadow-md shadow-gray-200/50">
                 <Image
                   src={Img_Helper.logo.jai_logo}
                   alt=""
+                  aria-hidden="true"
                   width={50}
                   height={34}
-                  className="h-auto w-[50px] object-contain"
-                  style={{ height: "auto" }}
+                  className="h-auto w-full object-contain"
                 />
               </span>
             </Link>
