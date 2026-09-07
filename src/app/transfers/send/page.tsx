@@ -390,6 +390,76 @@ const METHODS: {
   },
 ];
 
+const SUCCESS_VIEWS: Record<SendMethod, {
+  badgeLabel: string;
+  kicker: string;
+  shell: string;
+  hero: string;
+  strip: string;
+  topOrb: string;
+  bottomOrb: string;
+  badge: string;
+  sparkle: string;
+  icon: string;
+  kickerColor: string;
+  metricRing: string;
+  metricLabel: string;
+  methodRing: string;
+  methodLabel: string;
+}> = {
+  email: {
+    badgeLabel: "Protected email delivery",
+    kicker: "Email delivered",
+    shell: "border-green-200/80 shadow-green-500/10 dark:border-green-900/50",
+    hero: "from-green-50 via-white to-orange-50 dark:from-green-950/35 dark:via-zinc-900 dark:to-orange-950/20",
+    strip: "from-[rgb(73,140,1)] via-green-500 to-orange-400",
+    topOrb: "border-green-200/60 bg-green-100/50 dark:border-green-500/15 dark:bg-green-900/15",
+    bottomOrb: "border-orange-200/50 bg-orange-100/40 dark:border-orange-500/10 dark:bg-orange-900/10",
+    badge: "text-green-700 ring-green-100 dark:text-green-400 dark:ring-green-900/40",
+    sparkle: "bg-orange-100 text-orange-600 ring-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:ring-orange-900/40",
+    icon: "from-[rgb(73,140,1)] to-green-500 shadow-green-700/25",
+    kickerColor: "text-green-700 dark:text-green-400",
+    metricRing: "ring-green-100 dark:ring-green-900/30",
+    metricLabel: "text-green-700 dark:text-green-400",
+    methodRing: "ring-orange-100 dark:ring-orange-900/30",
+    methodLabel: "text-orange-600 dark:text-orange-400",
+  },
+  link: {
+    badgeLabel: "Private share link",
+    kicker: "Link generated",
+    shell: "border-green-200/80 shadow-green-500/10 dark:border-green-900/50",
+    hero: "from-green-50 via-green-50/70 to-orange-50 dark:from-green-950/35 dark:via-green-950/20 dark:to-orange-950/20",
+    strip: "from-[rgb(73,140,1)] via-green-500 to-orange-400",
+    topOrb: "border-green-200/60 bg-green-100/50 dark:border-green-500/15 dark:bg-green-900/15",
+    bottomOrb: "border-orange-200/50 bg-orange-100/35 dark:border-orange-500/10 dark:bg-orange-900/10",
+    badge: "text-green-700 ring-green-100 dark:text-green-400 dark:ring-green-900/40",
+    sparkle: "bg-orange-100 text-orange-600 ring-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:ring-orange-900/40",
+    icon: "from-[rgb(73,140,1)] via-green-500 to-orange-400 shadow-green-700/25",
+    kickerColor: "text-green-700 dark:text-green-400",
+    metricRing: "ring-green-100 dark:ring-green-900/30",
+    metricLabel: "text-green-700 dark:text-green-400",
+    methodRing: "ring-orange-100 dark:ring-orange-900/30",
+    methodLabel: "text-orange-600 dark:text-orange-400",
+  },
+  qr: {
+    badgeLabel: "Scan-ready access",
+    kicker: "QR code generated",
+    shell: "border-green-200/80 shadow-green-500/10 dark:border-green-900/50",
+    hero: "from-green-50 via-orange-50/60 to-white dark:from-green-950/35 dark:via-orange-950/15 dark:to-zinc-900",
+    strip: "from-[rgb(73,140,1)] via-orange-400 to-green-500",
+    topOrb: "border-green-200/60 bg-green-100/50 dark:border-green-500/15 dark:bg-green-900/15",
+    bottomOrb: "border-orange-200/50 bg-orange-100/40 dark:border-orange-500/10 dark:bg-orange-900/10",
+    badge: "text-green-700 ring-green-100 dark:text-green-400 dark:ring-green-900/40",
+    sparkle: "bg-orange-100 text-orange-600 ring-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:ring-orange-900/40",
+    icon: "from-[rgb(73,140,1)] to-orange-500 shadow-green-700/25",
+    kickerColor: "text-green-700 dark:text-green-400",
+    metricRing: "ring-green-100 dark:ring-green-900/30",
+    metricLabel: "text-green-700 dark:text-green-400",
+    methodRing: "ring-orange-100 dark:ring-orange-900/30",
+    methodLabel: "text-orange-600 dark:text-orange-400",
+  },
+};
+
 /* ──────────────────────────────────────────
    Status badge
 ────────────────────────────────────────── */
@@ -812,6 +882,10 @@ export default function SendPage() {
   };
 
   async function uploadFile(sf: SendFile): Promise<{ key: string; fileId: string; uploadSessionId?: string } | null> {
+    // A failed sibling or transfer request must not upload successful files again.
+    if (sf.status === "done" && sf.fileId) {
+      return { key: sf.key ?? "", fileId: sf.fileId };
+    }
     try {
       patchFile(sf.id, { status: "uploading", progress: 0, uploadedBytes: 0 });
       const res = await uploadApi.uploadFile(
@@ -849,6 +923,9 @@ export default function SendPage() {
 
   async function handleSend() {
     if (!canSend()) return;
+
+    pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+
     try {
       setSendPhase("uploading");
       const uploadConcurrency = getUploadFileConcurrency(files, totalSize);
@@ -1004,21 +1081,28 @@ export default function SendPage() {
     }
   }
 
-  function resetForm() {
+  const resetForm = useCallback(() => {
     setFiles([]); setPreloadedFiles([]); setEmails([]); setEmailInput("");
     setTitle(""); setSubject(""); setMessage("");
     setPasswordEnabled(false); setPassword("");
     setExpiresAt("");
     setCompletedTransfer(null);
     setGeneratedLink(""); setSentSuccess(false); setSendPhase("idle");
-  }
+  }, []);
 
-  function handleSendMoreFiles() {
+  const handleSendMoreFiles = useCallback(() => {
     resetForm();
     requestAnimationFrame(() => {
       pageTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
     });
-  }
+  }, [resetForm]);
+
+  useEffect(() => {
+    if (!sentSuccess) return;
+
+    const autoCloseTimer = window.setTimeout(handleSendMoreFiles, 15000);
+    return () => window.clearTimeout(autoCloseTimer);
+  }, [handleSendMoreFiles, sentSuccess]);
 
   function handlePickerConfirm(picked: PickedFile[]) {
     const existingIds = new Set(preloadedFiles.map((f) => f.id));
@@ -1075,6 +1159,7 @@ export default function SendPage() {
     link: generatedLink,
   };
   const successMethod = successSummary.method;
+  const successView = SUCCESS_VIEWS[successMethod];
   const showGeneratedLink = Boolean(successSummary.link) && successMethod !== "email";
   const showShareOptions = Boolean(successSummary.link) && successMethod !== "email";
 
@@ -1123,7 +1208,7 @@ export default function SendPage() {
 
             <div className="relative flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-3 sm:gap-4">
-                <div className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-500/25">
+                <div onClick={handleSendMoreFiles} className="relative cursor-pointer flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-orange-500 to-amber-500 text-white shadow-xl shadow-orange-500/25">
                   <Send size={24} />
                   <div className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-white shadow-sm dark:bg-zinc-900">
                     <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -1191,26 +1276,26 @@ export default function SendPage() {
               SUCCESS STATE
           ══════════════════════════════════════ */}
           {sentSuccess ? (
-            <div className="overflow-hidden rounded-2xl border border-[rgb(73,140,1)]/25 bg-white shadow-xl shadow-[rgb(73,140,1)]/10 sm:rounded-3xl dark:border-[rgb(73,140,1)]/30 dark:bg-zinc-950">
+            <div className={`overflow-hidden rounded-2xl border bg-white shadow-xl sm:rounded-3xl dark:bg-zinc-950 ${successView.shell}`}>
               <div className="flex flex-col">
-                <div className="relative overflow-hidden bg-linear-to-br from-green-50 via-white to-orange-50 px-4 py-5 text-slate-900 sm:px-6 sm:py-6 dark:from-green-950/35 dark:via-zinc-900 dark:to-orange-950/25 dark:text-white">
-                  <div className="absolute inset-x-0 top-0 h-1 bg-linear-to-r from-[rgb(73,140,1)] via-lime-500 to-orange-400" />
-                  <div className="pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full border border-[rgb(73,140,1)]/15 bg-green-100/40 dark:border-white/10 dark:bg-green-900/10" />
-                  <div className="pointer-events-none absolute -bottom-20 -left-12 h-52 w-52 rounded-full border border-orange-300/20 bg-orange-100/30 dark:border-orange-500/10 dark:bg-orange-900/10" />
+                <div className={`relative overflow-hidden bg-linear-to-br px-4 py-5 text-slate-900 sm:px-6 sm:py-6 dark:text-white ${successView.hero}`}>
+                  <div className={`absolute inset-x-0 top-0 h-1 bg-linear-to-r ${successView.strip}`} />
+                  <div className={`pointer-events-none absolute -right-16 -top-16 h-44 w-44 rounded-full border ${successView.topOrb}`} />
+                  <div className={`pointer-events-none absolute -bottom-20 -left-12 h-52 w-52 rounded-full border ${successView.bottomOrb}`} />
 
                   <div className="relative grid gap-5 md:grid-cols-[1fr_18rem] md:items-end">
                     <div>
                       <div className="mb-4 flex items-center justify-between gap-4">
-                        <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold text-[rgb(62,120,1)] shadow-sm ring-1 ring-green-100 dark:bg-zinc-900 dark:text-lime-400 dark:ring-green-900/40">
-                          <Shield size={13} /> Secure delivery
+                        <div className={`inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-xs font-bold shadow-sm ring-1 dark:bg-zinc-900 ${successView.badge}`}>
+                          <Shield size={13} /> {successView.badgeLabel}
                         </div>
-                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-orange-100 text-orange-500 ring-1 ring-orange-200 dark:bg-orange-900/20 dark:ring-orange-900/40">
+                        <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ring-1 ${successView.sparkle}`}>
                           <Sparkles size={17} />
                         </div>
                       </div>
 
                       <div className="relative mb-4 w-fit">
-                        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[rgb(73,140,1)] text-white shadow-xl shadow-green-700/25 sm:h-16 sm:w-16">
+                        <div className={`flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br text-white shadow-xl sm:h-16 sm:w-16 ${successView.icon}`}>
                           {successMethod === "email"
                             ? <Mail size={28} />
                             : successMethod === "qr"
@@ -1222,10 +1307,10 @@ export default function SendPage() {
                         </div>
                       </div>
 
-                      <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-[rgb(73,140,1)] dark:text-lime-400">
-                        Transfer complete
+                      <p className={`mb-2 text-xs font-bold uppercase tracking-[0.2em] ${successView.kickerColor}`}>
+                        {successView.kicker}
                       </p>
-                      <h2 className="max-w-md text-2xl font-black tracking-tight sm:text-3xl">
+                      <h2 role="status" aria-live="polite" className="max-w-md text-2xl font-black tracking-tight sm:text-3xl">
                         {successMethod === "email"
                           ? "Email sent successfully!"
                           : successMethod === "qr"
@@ -1243,16 +1328,16 @@ export default function SendPage() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-green-100 dark:bg-zinc-900 dark:ring-green-900/30">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[rgb(73,140,1)] dark:text-lime-400">Files</p>
+                      <div className={`rounded-xl bg-white p-2.5 shadow-sm ring-1 dark:bg-zinc-900 ${successView.metricRing}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${successView.metricLabel}`}>Files</p>
                         <p className="mt-0.5 text-lg font-black text-slate-900 dark:text-white">{successSummary.totalFileCount}</p>
                       </div>
-                      <div className="rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-green-100 dark:bg-zinc-900 dark:ring-green-900/30">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-[rgb(73,140,1)] dark:text-lime-400">Size</p>
+                      <div className={`rounded-xl bg-white p-2.5 shadow-sm ring-1 dark:bg-zinc-900 ${successView.metricRing}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${successView.metricLabel}`}>Size</p>
                         <p className="mt-0.5 truncate text-lg font-black text-slate-900 dark:text-white">{formatBytes(successSummary.totalSize)}</p>
                       </div>
-                      <div className="col-span-2 rounded-xl bg-white p-2.5 shadow-sm ring-1 ring-orange-100 dark:bg-zinc-900 dark:ring-orange-900/30">
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-orange-500">Method</p>
+                      <div className={`col-span-2 rounded-xl bg-white p-2.5 shadow-sm ring-1 dark:bg-zinc-900 ${successView.methodRing}`}>
+                        <p className={`text-[10px] font-bold uppercase tracking-widest ${successView.methodLabel}`}>Method</p>
                         <div className="mt-1 flex items-center gap-2 text-sm font-bold text-slate-900 dark:text-white">
                           {successMethod === "email" ? <Mail size={15} /> : successMethod === "qr" ? <QrCode size={15} /> : <LinkIcon size={15} />}
                           {successMethod === "email" ? "Email delivery" : successMethod === "qr" ? "QR code" : "Shareable link"}
@@ -1264,22 +1349,22 @@ export default function SendPage() {
 
                 <div className="flex min-w-0 flex-col gap-3 p-4 sm:p-5">
                   {successMethod === "email" && (
-                    <div className="overflow-hidden rounded-2xl border border-[rgb(73,140,1)]/25 bg-green-50/70 dark:border-[rgb(73,140,1)]/30 dark:bg-green-950/10">
-                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[rgb(73,140,1)]/20 bg-white/70 px-4 py-3 dark:border-[rgb(73,140,1)]/25 dark:bg-zinc-900/50">
-                        <div className="flex items-center gap-2 text-sm font-bold text-[rgb(62,120,1)] dark:text-lime-400">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[rgb(73,140,1)] text-white shadow-sm shadow-green-700/25">
+                    <div className="overflow-hidden rounded-2xl border border-green-200/80 bg-green-50/70 dark:border-green-900/40 dark:bg-green-950/10">
+                      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-green-200/70 bg-white/70 px-4 py-3 dark:border-green-900/35 dark:bg-zinc-900/50">
+                        <div className="flex items-center gap-2 text-sm font-bold text-green-700 dark:text-green-400">
+                          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-linear-to-br from-[rgb(73,140,1)] to-green-500 text-white shadow-sm shadow-green-700/25">
                             <Mail size={15} />
                           </span>
                           Email delivery
                         </div>
-                        <span className="rounded-full bg-lime-100 px-2.5 py-1 text-[11px] font-bold text-[rgb(62,120,1)] ring-1 ring-lime-200 dark:bg-lime-900/20 dark:text-lime-300 dark:ring-lime-900/40">
+                        <span className="rounded-full bg-orange-100 px-2.5 py-1 text-[11px] font-bold text-orange-700 ring-1 ring-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:ring-orange-900/40">
                           {successSummary.recipients.length} sent
                         </span>
                       </div>
                       <div className="grid gap-2 p-3 sm:grid-cols-2">
                         {successSummary.recipients.map((recipient) => (
                           <div key={recipient} className="flex min-w-0 items-center gap-3 rounded-xl border border-green-100 bg-white px-3 py-2.5 shadow-sm dark:border-green-900/30 dark:bg-zinc-900">
-                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-50 text-[rgb(73,140,1)] dark:bg-green-900/20 dark:text-lime-400">
+                            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400">
                               <Check size={13} />
                             </span>
                             <span className="min-w-0 truncate text-sm font-semibold text-(--text)">{recipient}</span>
@@ -1290,7 +1375,7 @@ export default function SendPage() {
                   )}
 
                   {successMethod === "qr" && successSummary.link && (
-                    <div className="grid gap-3 rounded-2xl border border-[rgb(73,140,1)]/25 bg-linear-to-br from-green-50 via-lime-50/60 to-orange-50 p-3 dark:border-[rgb(73,140,1)]/30 dark:from-green-950/20 dark:via-lime-950/10 dark:to-zinc-900 sm:grid-cols-[128px_1fr] sm:items-center">
+                    <div className="grid gap-3 rounded-2xl border border-[rgb(73,140,1)]/25 bg-linear-to-br from-green-50 via-orange-50/60 to-white p-3 dark:border-[rgb(73,140,1)]/30 dark:from-green-950/20 dark:via-orange-950/10 dark:to-zinc-900 sm:grid-cols-[128px_1fr] sm:items-center">
                       <div className="mx-auto flex aspect-square w-full max-w-32 items-center justify-center rounded-xl border-4 border-white bg-white p-2 shadow-xl shadow-green-700/15 dark:border-zinc-800">
                         {/* eslint-disable-next-line @next/next/no-img-element -- dynamic QR service URL is not in the image allowlist */}
                         <img
@@ -1300,7 +1385,7 @@ export default function SendPage() {
                         />
                       </div>
                       <div className="flex flex-col justify-center text-center sm:text-left">
-                        <div className="mb-2 inline-flex w-fit items-center gap-2 self-center rounded-full bg-white px-3 py-1 text-xs font-bold text-[rgb(62,120,1)] ring-1 ring-green-100 dark:bg-zinc-900 dark:text-lime-400 dark:ring-green-900/40 sm:self-start">
+                        <div className="mb-2 inline-flex w-fit items-center gap-2 self-center rounded-full bg-white px-3 py-1 text-xs font-bold text-[rgb(62,120,1)] ring-1 ring-green-100 dark:bg-zinc-900 dark:text-green-400 dark:ring-green-900/40 sm:self-start">
                           <QrCode size={13} /> QR code ready
                         </div>
                         <p className="text-sm leading-6 text-(--text-muted)">
@@ -1315,26 +1400,26 @@ export default function SendPage() {
                   )}
 
                   {showGeneratedLink && (
-                    <div className="min-w-0 overflow-hidden rounded-2xl border border-[rgb(73,140,1)]/25 bg-white shadow-sm shadow-green-700/10 dark:border-[rgb(73,140,1)]/30 dark:bg-zinc-900">
+                    <div className="min-w-0 overflow-hidden rounded-2xl border border-green-200/80 bg-white shadow-sm shadow-green-700/10 dark:border-green-900/40 dark:bg-zinc-900">
                       <div className="flex min-w-0 items-center gap-3 bg-green-50/80 px-3 py-3 sm:px-4 dark:bg-green-950/15">
-                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[rgb(73,140,1)] text-white shadow-sm shadow-green-700/25">
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[rgb(73,140,1)] via-green-500 to-orange-400 text-white shadow-sm shadow-green-700/25">
                           <LinkIcon size={16} />
                         </span>
                         <a href={successSummary.link} target="_blank" rel="noopener noreferrer"
-                          className="min-w-0 flex-1 truncate font-mono text-xs font-semibold text-[rgb(62,120,1)] hover:underline dark:text-lime-400">
+                          className="min-w-0 flex-1 truncate font-mono text-xs font-semibold text-green-700 hover:underline dark:text-green-400">
                           {successSummary.link}
                         </a>
                       </div>
                       <div className="flex divide-x divide-green-100 border-t border-green-100 dark:divide-green-900/30 dark:border-green-900/30">
                         <button type="button" onClick={copyLink}
-                          className="flex flex-1 items-center justify-center gap-2 py-3 text-xs font-bold text-[rgb(62,120,1)] transition-colors hover:bg-green-50 dark:text-lime-400 dark:hover:bg-green-900/20">
+                          className="flex flex-1 items-center justify-center gap-2 py-3 text-xs font-bold text-green-700 transition-colors hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20">
                           {linkCopied
-                              ? <><Check size={12} className="text-[rgb(73,140,1)]" /> Copied!</>
+                              ? <><Check size={12} /> Copied!</>
                             : <><Copy size={12} /> Copy Link</>}
                         </button>
                         <button type="button"
                           onClick={() => window.open(successSummary.link, "_blank", "noopener,noreferrer")}
-                          className="flex flex-1 items-center justify-center gap-2 py-3 text-xs font-bold text-[rgb(62,120,1)] transition-colors hover:bg-green-50 dark:text-lime-400 dark:hover:bg-green-900/20">
+                          className="flex flex-1 items-center justify-center gap-2 py-3 text-xs font-bold text-green-700 transition-colors hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-900/20">
                           <ExternalLink size={12} /> Open
                         </button>
                       </div>
@@ -1342,27 +1427,27 @@ export default function SendPage() {
                   )}
 
                   {showShareOptions && (
-                    <details className="group rounded-xl border border-[rgb(73,140,1)]/20 bg-green-50/50 dark:border-[rgb(73,140,1)]/30 dark:bg-green-950/10">
+                    <details className="group rounded-xl border border-gray-200 bg-gray-50/70 dark:border-zinc-700 dark:bg-zinc-900/70">
                       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-bold text-(--text) [&::-webkit-details-marker]:hidden">
                         <span className="flex items-center gap-2">
-                          <Share2 size={15} className="text-[rgb(73,140,1)]" /> Share options
+                          <Share2 size={15} className={successView.kickerColor} /> Share options
                         </span>
-                        <ChevronDown size={16} className="text-[rgb(73,140,1)] transition-transform group-open:rotate-180" />
+                        <ChevronDown size={16} className={`transition-transform group-open:rotate-180 ${successView.kickerColor}`} />
                       </summary>
-                      <div className="grid grid-cols-1 gap-2 border-t border-green-100 p-3 sm:grid-cols-2 lg:grid-cols-3 dark:border-green-900/30">
+                      <div className="grid grid-cols-1 gap-2 border-t border-gray-200 p-3 sm:grid-cols-2 lg:grid-cols-3 dark:border-zinc-700">
                         {successMethod === "link" && (
                           <button
                             type="button"
                             onClick={downloadQrCode}
                             disabled={qrDownloading}
-                            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-white text-sm font-bold text-[rgb(62,120,1)] transition-colors hover:bg-green-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-green-900/40 dark:bg-zinc-950 dark:text-lime-400 dark:hover:bg-green-900/20"
+                            className="flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-white text-sm font-bold text-orange-700 transition-colors hover:bg-orange-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-orange-900/40 dark:bg-zinc-950 dark:text-orange-400 dark:hover:bg-orange-900/20"
                           >
                             {qrDownloading ? <Spinner size={15} /> : <QrCode size={15} />} QR Code
                           </button>
                         )}
                         <a
                           href={shareHref("email", successSummary.link)}
-                          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-white text-sm font-bold text-[rgb(62,120,1)] transition-colors hover:bg-green-100 dark:border-green-900/40 dark:bg-zinc-950 dark:text-lime-400 dark:hover:bg-green-900/20"
+                          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-orange-200 bg-white text-sm font-bold text-orange-700 transition-colors hover:bg-orange-100 dark:border-orange-900/40 dark:bg-zinc-950 dark:text-orange-400 dark:hover:bg-orange-900/20"
                         >
                           <Mail size={15} /> Email Link
                         </a>
@@ -1370,13 +1455,13 @@ export default function SendPage() {
                           href={shareHref("whatsapp", successSummary.link)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-white text-sm font-bold text-[rgb(62,120,1)] transition-colors hover:bg-green-100 dark:border-green-900/40 dark:bg-zinc-950 dark:text-lime-400 dark:hover:bg-green-900/20"
+                          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-white text-sm font-bold text-green-700 transition-colors hover:bg-green-100 dark:border-green-900/40 dark:bg-zinc-950 dark:text-green-400 dark:hover:bg-green-900/20"
                         >
                           <MessageCircle size={15} /> WhatsApp
                         </a>
                         <a
                           href={shareHref("sms", successSummary.link)}
-                          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-white text-sm font-bold text-[rgb(62,120,1)] transition-colors hover:bg-green-100 dark:border-green-900/40 dark:bg-zinc-950 dark:text-lime-400 dark:hover:bg-green-900/20"
+                          className="flex h-11 items-center justify-center gap-2 rounded-xl border border-green-200 bg-white text-sm font-bold text-green-700 transition-colors hover:bg-green-100 dark:border-green-900/40 dark:bg-zinc-950 dark:text-green-400 dark:hover:bg-green-900/20"
                         >
                           <Smartphone size={15} /> SMS
                         </a>
@@ -1396,7 +1481,20 @@ export default function SendPage() {
                     <p className="text-xs text-(--text-muted)">
                       Your transfer is saved and ready from the transfers view.
                     </p>
-                    <Button variant="secondary" onClick={handleSendMoreFiles} leftIcon={<RefreshCw size={14} />} rounded="full">
+                    <Button
+                      variant="secondary"
+                      size="md"
+                      onClick={handleSendMoreFiles}
+                      leftIcon={
+                        <RefreshCw
+                          size={15}
+                          strokeWidth={2.4}
+                          className="transition-transform duration-500 group-hover:rotate-180"
+                        />
+                      }
+                      rounded="full"
+                      className="min-w-44 !border-green-700 !bg-[rgb(73,140,1)] px-6 font-bold !text-white shadow-lg shadow-green-700/20 hover:!border-green-800 hover:!bg-green-700 hover:!text-white dark:!border-green-500 dark:!bg-green-600 dark:!text-white dark:hover:!bg-green-500"
+                    >
                       Send More Files
                     </Button>
                   </div>
@@ -1485,7 +1583,7 @@ export default function SendPage() {
                               {isDragging ? "Drop files or folders here" : "Drag & drop files or folders"}
                             </p>
                             <p className="mt-1 text-sm text-(--text-muted)">
-                              Company file formats supported · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
+                              All file types supported · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
                             </p>
                           </div>
                           <div className="flex items-center gap-2">
@@ -1570,7 +1668,7 @@ export default function SendPage() {
                                         type="button"
                                         aria-label={`Remove ${f.name}`}
                                         onClick={(e) => { e.stopPropagation(); setPreloadedFiles((p) => p.filter((x) => x.id !== f.id)); }}
-                                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20"
+                                        className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-black hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/20"
                                       >
                                         <X size={11} />
                                       </button>
@@ -1623,8 +1721,8 @@ export default function SendPage() {
                                           e.stopPropagation();
                                           setFiles((p) => p.filter((f) => !f.relativePath?.startsWith(`${folderName}/`)));
                                         }}
-                                        className="mr-2 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20">
-                                        <X size={11} />
+                                        className="mr-2 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-100 hover:text-red-600 hover:ring-red-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-red-900/40 dark:hover:text-red-400 dark:hover:ring-red-900">
+                                        <X size={13} strokeWidth={2.5} />
                                       </button>
                                     )}
                                   </div>
@@ -1653,8 +1751,8 @@ export default function SendPage() {
                                             {sf.status === "idle" && !isSending && (
                                               <button type="button" aria-label={`Remove ${sf.file.name}`}
                                                 onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((f) => f.id !== sf.id)); }}
-                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-400 hover:bg-red-50 hover:text-red-500 dark:hover:bg-red-900/20">
-                                                <X size={11} />
+                                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-100 hover:text-red-600 hover:ring-red-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-red-900/40 dark:hover:text-red-400 dark:hover:ring-red-900">
+                                                <X size={13} strokeWidth={2.5} />
                                               </button>
                                             )}
                                           </div>
@@ -1697,8 +1795,8 @@ export default function SendPage() {
                                 {sf.status === "idle" && !isSending && (
                                   <button type="button" aria-label={`Remove ${sf.file.name}`}
                                     onClick={(e) => { e.stopPropagation(); setFiles((p) => p.filter((f) => f.id !== sf.id)); }}
-                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-gray-300 transition-colors hover:bg-red-50 hover:text-red-500 dark:text-zinc-600 dark:hover:bg-red-900/20">
-                                    <X size={12} />
+                                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-700 shadow-sm ring-1 ring-gray-200 transition-colors hover:bg-red-100 hover:text-red-600 hover:ring-red-200 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-zinc-700 dark:hover:bg-red-900/40 dark:hover:text-red-400 dark:hover:ring-red-900">
+                                    <X size={13} strokeWidth={2.5} />
                                   </button>
                                 )}
                               </div>

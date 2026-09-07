@@ -46,6 +46,7 @@ async function traverseEntry(
   entry: FileSystemEntry,
   basePath: string,
   out: { file: File; relativePath: string }[],
+  directories: string[],
 ): Promise<void> {
   if (entry.isFile) {
     await new Promise<void>((resolve, reject) =>
@@ -55,16 +56,13 @@ async function traverseEntry(
       }, reject),
     );
   } else if (entry.isDirectory) {
+    const directoryPath = basePath ? `${basePath}/${entry.name}` : entry.name;
+    directories.push(directoryPath);
     const reader = (entry as FileSystemDirectoryEntry).createReader();
     const entries = await readAllEntries(reader);
-    await Promise.all(
-      entries.map((e) =>
-        traverseEntry(
-          e,
-          basePath ? `${basePath}/${entry.name}` : entry.name,
-          out,
-        ),
-      ),
+    await pool(
+      entries.map((e) => () => traverseEntry(e, directoryPath, out, directories)),
+      FOLDER_TRAVERSAL_CONCURRENCY,
     );
   }
 }
@@ -127,11 +125,13 @@ interface UploadModalProps {
   transferMode?: boolean;
 }
 
+const FOLDER_TRAVERSAL_CONCURRENCY = 16;
+
 /* ──────────────────────────────────────────
    Helpers
 ────────────────────────────────────────── */
 
-function extractFolderPaths(relativePaths: string[]): string[] {
+function extractFolderPaths(relativePaths: string[], directoryPaths: string[] = []): string[] {
   const folderSet = new Set<string>();
   relativePaths.forEach((rp) => {
     const parts = rp.split("/");
@@ -139,12 +139,29 @@ function extractFolderPaths(relativePaths: string[]): string[] {
       folderSet.add(parts.slice(0, i).join("/"));
     }
   });
-  return Array.from(folderSet).sort(); // lexicographic = parent before child
+  directoryPaths.forEach((path) => {
+    const parts = path.split("/").filter(Boolean);
+    for (let i = 1; i <= parts.length; i++) {
+      folderSet.add(parts.slice(0, i).join("/"));
+    }
+  });
+  return Array.from(folderSet).sort((a, b) => {
+    const depthDifference = a.split("/").length - b.split("/").length;
+    return depthDifference || a.localeCompare(b);
+  });
 }
 
 function parentPath(path: string): string | null {
   const idx = path.lastIndexOf("/");
   return idx === -1 ? null : path.slice(0, idx);
+}
+
+function getUploadConcurrency(files: UploadFile[]): number {
+  if (files.length <= 1) return 1;
+  const totalSize = files.reduce((sum, item) => sum + item.file.size, 0);
+  if (totalSize >= 2 * 1024 ** 3) return 1;
+  if (files.some((item) => item.file.size >= UPLOAD_LIMITS.MULTIPART_THRESHOLD)) return 2;
+  return 4;
 }
 
 async function pool<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {
@@ -410,7 +427,10 @@ export default function UploadModal({
   const busy = uploading || creatingTransfer;
 
   /* ── Build / replace queue from raw file+path pairs ── */
-  const buildQueue = useCallback((items: { file: File; relativePath: string }[]) => {
+  const buildQueue = useCallback((
+    items: { file: File; relativePath: string }[],
+    explicitDirectories: string[] = [],
+  ) => {
     const validSize = items.filter(({ file }) => file.size <= UPLOAD_LIMITS.MAX_FILE_BYTES);
     const rejected = items.length - validSize.length;
 
@@ -418,7 +438,7 @@ export default function UploadModal({
       showToast.error(`${rejected} file${rejected !== 1 ? "s" : ""} skipped. Max size is ${formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file.`);
     }
 
-    if (validSize.length === 0) return;
+    if (validSize.length === 0 && explicitDirectories.length === 0) return;
 
     const existing = new Set(files.map((f) => uploadFileIdentity(f.file, f.relativePath)));
     const accepted: { file: File; relativePath: string }[] = [];
@@ -448,7 +468,7 @@ export default function UploadModal({
     if (skippedForBatchSize > 0) {
       showToast.error(`${skippedForBatchSize} file${skippedForBatchSize !== 1 ? "s" : ""} skipped. Batch max is ${formatBytes(UPLOAD_LIMITS.MAX_BATCH_BYTES)}.`);
     }
-    if (accepted.length === 0) return;
+    if (accepted.length === 0 && explicitDirectories.length === 0) return;
 
     const uploadFiles: UploadFile[] = accepted.map(({ file, relativePath }) => {
       const parts = relativePath.split("/");
@@ -464,7 +484,7 @@ export default function UploadModal({
     });
 
     const allRelPaths  = accepted.map((i) => i.relativePath);
-    const folderPaths  = extractFolderPaths(allRelPaths);
+    const folderPaths  = extractFolderPaths(allRelPaths, explicitDirectories);
     const uploadFolders: UploadFolder[] = folderPaths.map((path) => ({
       path,
       name:       path.split("/").pop()!,
@@ -473,7 +493,9 @@ export default function UploadModal({
       expanded:   true,
     }));
 
-    setFiles((prev)   => [...prev,   ...uploadFiles]);
+    if (uploadFiles.length > 0) {
+      setFiles((prev) => [...prev, ...uploadFiles]);
+    }
     setFolders((prev) => {
       const existing = new Set(prev.map((f) => f.path));
       return [...prev, ...uploadFolders.filter((f) => !existing.has(f.path))];
@@ -511,8 +533,12 @@ export default function UploadModal({
 
       if (entries.length > 0) {
         const collected: { file: File; relativePath: string }[] = [];
-        await Promise.all(entries.map((en) => traverseEntry(en, "", collected)));
-        buildQueue(collected);
+        const directories: string[] = [];
+        await pool(
+          entries.map((en) => () => traverseEntry(en, "", collected, directories)),
+          FOLDER_TRAVERSAL_CONCURRENCY,
+        );
+        buildQueue(collected, directories);
         return;
       }
 
@@ -663,7 +689,7 @@ export default function UploadModal({
   async function startUpload() {
     const pendingFiles   = files.filter((f) => f.status === "pending");
     const pendingFolders = folders.filter((f) => f.status === "pending");
-    if (pendingFiles.length === 0) return;
+    if (pendingFiles.length === 0 && pendingFolders.length === 0) return;
 
     const pathToId = new Map<string, string>(
       folders
@@ -680,6 +706,12 @@ export default function UploadModal({
       }
     }
 
+    if (pendingFiles.length === 0) {
+      showToast.success(`${pendingFolders.length} folder${pendingFolders.length !== 1 ? "s" : ""} created`);
+      onUploadComplete?.();
+      return;
+    }
+
     type UploadResult = { success: boolean; backendFileId?: string; localFile: UploadFile };
 
     const results = await pool<UploadResult>(
@@ -690,7 +722,7 @@ export default function UploadModal({
           return { ...r, localFile: f };
         };
       }),
-      4,
+      getUploadConcurrency(pendingFiles),
     );
 
     const successResults = results.filter((r) => r.success && r.backendFileId);
@@ -775,6 +807,7 @@ export default function UploadModal({
 
   /* ── Derived counts ── */
   const pendingFiles = files.filter((f) => f.status === "pending");
+  const pendingFolderCount = folders.filter((f) => f.status === "pending").length;
   const doneCount    = files.filter((f) => f.status === "done").length;
   const errorCount   = files.filter((f) => f.status === "error").length;
 
@@ -820,7 +853,7 @@ export default function UploadModal({
                 {isDragging ? "Drop files or folders here" : "Upload files or folders"}
               </p>
               <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Drag &amp; drop, or browse · Company file formats · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
+                Drag &amp; drop, or browse · All file types · Up to {formatBytes(UPLOAD_LIMITS.MAX_FILE_BYTES)} per file
               </p>
               <p className="mt-0.5 text-xs text-gray-400 dark:text-gray-500">
                 {transferMode
@@ -996,7 +1029,9 @@ export default function UploadModal({
         <p className="text-xs text-gray-400 dark:text-gray-500">
           {files.length > 0
             ? `${formatBytes(files.reduce((s, f) => s + f.file.size, 0))} total`
-            : "No files selected"}
+            : folders.length > 0
+            ? `${folders.length} folder${folders.length !== 1 ? "s" : ""} selected`
+            : "No files or folders selected"}
         </p>
         <div className="flex items-center gap-2">
           <Button type="button" variant="secondary" onClick={handleClose} disabled={busy}>
@@ -1010,7 +1045,7 @@ export default function UploadModal({
               type="button"
               onClick={startUpload}
               loading={busy}
-              disabled={pendingFiles.length === 0 || busy}
+              disabled={(pendingFiles.length === 0 && pendingFolderCount === 0) || busy}
               leftIcon={!busy ? <Upload size={15} /> : undefined}
             >
               {creatingTransfer
@@ -1019,6 +1054,8 @@ export default function UploadModal({
                 ? "Uploading…"
                 : pendingFiles.length > 0
                 ? `Upload ${pendingFiles.length} file${pendingFiles.length !== 1 ? "s" : ""}`
+                : pendingFolderCount > 0
+                ? `Create ${pendingFolderCount} folder${pendingFolderCount !== 1 ? "s" : ""}`
                 : "Upload"}
             </Button>
           )}

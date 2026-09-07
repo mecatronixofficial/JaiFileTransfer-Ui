@@ -1,5 +1,6 @@
 "use client";
 
+import BrandLogo from "@/components/ui/BrandLogo";
 import {
   useState,
   useEffect,
@@ -11,7 +12,6 @@ import {
 } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import Image from "next/image";
 import {
   LayoutDashboard,
   ArrowLeftRight,
@@ -56,7 +56,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Avatar } from "@/components/ui";
 import { formatBytes } from "@/lib/utils";
 import Button from "../ui/Button";
-import ImgHelper from "@/helper/img_helper";
 
 /* ─── Types ─── */
 type Role = "USER" | "ADMIN" | "SUPERADMIN";
@@ -734,16 +733,7 @@ function Sidebar({
               href="/dashboard"
               className="group flex items-center gap-2.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40"
             >
-              <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-linear-to-br from-orange-500/15 to-amber-400/10 ring-1 ring-orange-400/30 transition-all duration-200 group-hover:scale-105 group-hover:ring-orange-500/60">
-                <Image
-                  src={ImgHelper.logo.jai_logo}
-                  alt="Jai Export Enterprises"
-                  width={24}
-                  height={16}
-                  className="h-auto w-6 object-contain"
-                  style={{ height: "auto" }}
-                />
-              </div>
+              <BrandLogo className="h-9 w-9" />
               <div className="min-w-0">
                 <p className="company-name truncate text-[13px] font-bold leading-none text-gray-900 dark:text-white">
                   Jai Export Enterprises
@@ -758,16 +748,7 @@ function Sidebar({
               href="/dashboard"
               className="group mx-auto rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-orange-400/40"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-linear-to-br from-orange-500/15 to-amber-400/10 ring-1 ring-orange-400/30 transition-all duration-200 group-hover:scale-105 group-hover:ring-orange-500/60">
-                <Image
-                  src={ImgHelper.logo.jai_logo}
-                  alt="Jai Export Enterprises"
-                  width={24}
-                  height={16}
-                  className="h-auto w-6 object-contain"
-                  style={{ height: "auto" }}
-                />
-              </div>
+              <BrandLogo className="h-9 w-9" />
             </Link>
           )}
 

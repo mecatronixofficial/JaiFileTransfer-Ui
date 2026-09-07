@@ -11,11 +11,12 @@ import {
 
 import Sidebar from "./Sidebar";
 import Header from "./Header";
-import { usersApi } from "@/lib/api";
+import dynamic from "next/dynamic";
+import { useStorageQuery } from "@/hooks/useStorageQuery";
 import { useAuth } from "@/contexts/AuthContext";
-import UploadModal from "@/components/modals/UploadModal";
+const UploadModal = dynamic(() => import("@/components/modals/UploadModal"));
 import { readStorageUsage } from "@/lib/storage";
-import { listenAppDataChanged } from "@/lib/app-events";
+
 
 /* =========================
    STORAGE CONTEXT
@@ -48,54 +49,15 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   const { user } = useAuth();
-  const userId = user?.id ?? user?._id;
+  const storageQuery = useStorageQuery();
+  const storageUsed = storageQuery.data?.used ?? readStorageUsage(user).used;
+  const storageLoading = storageQuery.isLoading;
+  const { refetch } = storageQuery;
 
-  const [storageUsed, setStorageUsed]             = useState(0);
-  const [storageLoading, setStorageLoading]       = useState(true);
   const [showUpload, setShowUpload]               = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
-  const [refreshSeq, setRefreshSeq]               = useState(0);
 
-  /* refreshStorage just increments a counter; the effect below does the work.
-     This keeps it a plain () => void so the React Compiler doesn't flag it as
-     "calling setState within an effect" at the call site. */
-  const refreshStorage = useCallback(() => setRefreshSeq((n) => n + 1), []);
-
-  useEffect(() => {
-    return listenAppDataChanged((detail) => {
-      if (detail.storage || detail.files || detail.folders) refreshStorage();
-    });
-  }, [refreshStorage]);
-
-  /* ── Storage fetch ──
-     The local async function lets the React Compiler trace that every
-     setState call happens only after an `await`, satisfying its rule about
-     not calling setState synchronously within an effect.
-  ── */
-  useEffect(() => {
-    if (!userId) return;
-
-    let alive = true;
-
-    async function fetchStorage() {
-      try {
-        const res = await usersApi.myStorage();
-        if (!alive) return;
-        const storage = readStorageUsage(res.data, {
-          used: readStorageUsage(user).used,
-          quota: 0,
-        });
-        setStorageUsed(storage.used);
-      } catch {
-        // silent — layout should never crash over storage
-      } finally {
-        if (alive) setStorageLoading(false);
-      }
-    }
-
-    fetchStorage();
-    return () => { alive = false; };
-  }, [user, userId, refreshSeq]);
+  const refreshStorage = useCallback(() => { void refetch(); }, [refetch]);
 
   /* ── Mobile sidebar: close on Escape ── */
   useEffect(() => {
@@ -152,12 +114,12 @@ export default function DashboardLayout({
           </main>
         </div>
 
-        <UploadModal
+        {showUpload && <UploadModal
           open={showUpload}
           onClose={() => setShowUpload(false)}
           onUploadComplete={refreshStorage}
           transferMode
-        />
+        />}
       </div>
     </StorageContext.Provider>
   );

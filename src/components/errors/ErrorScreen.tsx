@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import BrandLogo from "@/components/ui/BrandLogo";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -69,16 +69,7 @@ export default function ErrorScreen({
             aria-label="Jai Export Enterprises home"
             className="inline-flex min-w-0 items-center gap-3 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-[rgb(73,140,1)]/40"
           >
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-              <Image
-                src="/logo/jai-logo.png"
-                alt=""
-                aria-hidden="true"
-                width={50}
-                height={34}
-                className="h-auto w-full object-contain"
-              />
-            </span>
+            <BrandLogo className="h-12 w-12" />
             <span className="min-w-0">
               <span className="company-name block truncate text-sm font-bold uppercase tracking-[0.11em] text-slate-950 sm:text-base">
                 Jai Export Enterprises

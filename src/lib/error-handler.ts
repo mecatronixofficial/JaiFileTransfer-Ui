@@ -29,15 +29,17 @@ export function getErrorMessage(err: unknown): string {
 
     const { data, status } = err.response as {
       status: number;
-      data?: { message?: string; error?: string; errors?: string[] };
+      data?: { message?: string | string[]; error?: string; errors?: string[] };
     };
 
     if (data?.errors?.length) return data.errors[0];
+    if (Array.isArray(data?.message)) return data.message.join('. ');
     if (data?.message) return data.message;
     if (data?.error) return data.error;
     if (HTTP_MESSAGES[status]) return HTTP_MESSAGES[status];
   }
 
+  if (err instanceof Error && err.message) return err.message;
   return 'Something went wrong. Please try again.';
 }
 

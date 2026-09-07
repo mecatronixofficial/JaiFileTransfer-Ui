@@ -1,11 +1,12 @@
 "use client";
 
+import BrandLogo from "@/components/ui/BrandLogo";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   Download, Lock, Folder, FolderOpen, ChevronRight, Home,
   Loader2, Shield, AlertTriangle, XCircle, Clock,
-  Eye, EyeOff, AlertCircle, Send, Sparkles, CloudUpload,
+  Eye, EyeOff, AlertCircle, Sparkles, CloudUpload,
   File, Image, FileText, Music, Video, Archive, Table2, Code, X,
   Copy, Check,
 } from "lucide-react";
@@ -231,9 +232,7 @@ export default function PublicLinkPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-zinc-950">
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-            <Send size={20} />
-          </div>
+          <BrandLogo className="h-12 w-12" decorative />
           <div className="flex flex-col items-center gap-2">
             <Loader2 size={26} className="animate-spin text-orange-500" />
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading shared files…</p>
@@ -246,9 +245,7 @@ export default function PublicLinkPage() {
   if (error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 p-4 dark:bg-zinc-950">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-          <Send size={18} />
-        </div>
+        <BrandLogo className="h-12 w-12" decorative />
         <div className="w-full max-w-sm text-center">
           <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-900/20">
             <XCircle size={36} className="text-red-400" />
@@ -267,9 +264,7 @@ export default function PublicLinkPage() {
       <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-orange-50 via-amber-50/40 to-white p-4 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/30">
-              <Send size={20} />
-            </div>
+            <BrandLogo className="mx-auto mb-3 h-12 w-12" decorative />
             <p className="company-name text-xs font-bold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
             <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">Secure File Share</p>
           </div>
@@ -331,9 +326,7 @@ export default function PublicLinkPage() {
 
         {/* Brand header */}
         <div className="mb-7 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-            <Send size={18} />
-          </div>
+          <BrandLogo className="h-12 w-12" decorative />
           <div>
             <p className="company-name text-sm font-extrabold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
             <p className="text-[11px] text-gray-400 dark:text-gray-500">Secure File Share · Cloudflare R2</p>
