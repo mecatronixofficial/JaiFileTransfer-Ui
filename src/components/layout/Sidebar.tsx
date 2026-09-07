@@ -508,6 +508,7 @@ function Sidebar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentSearch = searchParams.toString();
+  const previousRoute = useRef({ pathname, search: currentSearch });
   const { user, logout } = useAuth();
   const navRef = useRef<HTMLElement>(null);
 
@@ -552,7 +553,11 @@ function Sidebar({
 
   /* Close mobile sidebar on navigation */
   useEffect(() => {
-    if (mobileOpen) onMobileClose?.();
+    const routeChanged =
+      previousRoute.current.pathname !== pathname ||
+      previousRoute.current.search !== currentSearch;
+    previousRoute.current = { pathname, search: currentSearch };
+    if (routeChanged && mobileOpen) onMobileClose?.();
   }, [pathname, currentSearch, mobileOpen, onMobileClose]);
 
   useEffect(() => {
@@ -715,7 +720,7 @@ function Sidebar({
     <>
       <aside
         className={[
-          "fixed inset-y-0 left-0 z-40 flex h-screen flex-col overflow-hidden",
+          "fixed inset-y-0 left-0 z-[46] flex h-screen flex-col overflow-hidden",
           "border-r border-gray-200/70 bg-white dark:border-zinc-800/60 dark:bg-zinc-950",
           "transition-[width,transform] duration-300 ease-in-out",
           "lg:sticky lg:top-0 lg:z-auto lg:shrink-0 lg:translate-x-0",
