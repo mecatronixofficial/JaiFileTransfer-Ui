@@ -1,6 +1,8 @@
 # FileFlux — File Transfer Frontend
 
-Complete Next.js 15 frontend wired to your REST API.
+Complete Next.js 16 frontend wired to your REST API.
+
+Uploads accept every file type, preserve nested folder paths, and retain empty folders when they are added by drag and drop in a supported browser.
 
 ## Quick Start
 

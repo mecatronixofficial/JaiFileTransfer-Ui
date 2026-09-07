@@ -1,18 +1,17 @@
 "use client";
 
+import BrandLogo from "@/components/ui/BrandLogo";
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
-import NextImage from "next/image";
 import {
   Download, Lock, FileText, Image as ImageIcon, Video, Archive, Music, Code,
   Table2, File, Clock, CheckCircle, XCircle, Eye, EyeOff,
   AlertTriangle, Loader2, Shield, Folder, FolderOpen,
   ChevronDown, ChevronRight, CloudUpload, Send, Sparkles,
-  AlertCircle, X, Check, User as UserIcon,
+  AlertCircle, X, Check, RefreshCw, User as UserIcon,
 } from "lucide-react";
 import { formatBytes, formatDate, getInitials } from "@/lib/utils";
 import { BASE_URL } from "@/lib/api";
-import ImgHelper from "@/helper/img_helper";
 import axios from "axios";
 
 /* ──────────────────────────────────────────
@@ -52,26 +51,19 @@ interface FolderNode {
 
 function BrandHeader() {
   return (
-    <div className="flex w-full items-center justify-between gap-4 rounded-2xl border border-orange-100/80 bg-white/75 px-4 py-3 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/75 sm:px-5 sm:py-4">
-      <div className="min-w-0 text-left">
-        <p className="company-name truncate text-sm font-extrabold uppercase tracking-[0.16em] text-orange-500 sm:text-base sm:tracking-[0.2em]">
+    <header className="relative flex w-full items-center justify-between gap-4 overflow-hidden rounded-2xl border border-white/30 bg-linear-to-r from-[rgb(62,120,1)] via-[rgb(73,140,1)] to-orange-500 px-4 py-3.5 text-white shadow-xl shadow-green-800/15 sm:px-6 sm:py-4">
+      <div className="pointer-events-none absolute -left-8 -top-14 h-32 w-32 rounded-full border border-white/15 bg-white/5" />
+      <div className="pointer-events-none absolute -bottom-16 right-20 h-36 w-36 rounded-full border border-orange-200/20 bg-orange-300/10" />
+      <div className="relative min-w-0 text-left">
+        <p className="company-name truncate text-sm font-black uppercase tracking-[0.16em] sm:text-base sm:tracking-[0.2em]">
           Jai Export Enterprises
         </p>
-        <p className="mt-0.5 truncate text-[10px] text-gray-400 dark:text-gray-500 sm:text-xs">
-          Secure File Transfer · Cloudflare R2
+        <p className="mt-1 flex items-center gap-1.5 truncate text-[10px] font-medium text-white/80 sm:text-xs">
+          <Shield size={11} /> Secure File Transfer <span className="text-orange-200">·</span> Cloudflare R2
         </p>
       </div>
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-orange-500/15 to-amber-400/10 ring-1 ring-orange-400/30 sm:h-14 sm:w-14 sm:rounded-2xl">
-        <NextImage
-          src={ImgHelper.logo.jai_logo}
-          alt="Jai Export Enterprises company logo"
-          width={44}
-          height={30}
-          priority
-          className="h-auto w-8 object-contain sm:w-10"
-        />
-      </div>
-    </div>
+      <BrandLogo className="h-12 w-12" />
+    </header>
   );
 }
 
@@ -80,20 +72,20 @@ function BrandHeader() {
 ────────────────────────────────────────── */
 function FileIcon({ ext, size = 18 }: { ext: string; size?: number }) {
   const e = ext.toLowerCase();
-  if (["pdf"].includes(e))                                   return <FileText size={size} className="text-red-500" />;
-  if (["jpg","jpeg","png","gif","svg","webp","bmp"].includes(e)) return <ImageIcon size={size} className="text-blue-500" />;
-  if (["mp4","mov","avi","mkv","webm"].includes(e))          return <Video    size={size} className="text-purple-500" />;
-  if (["mp3","wav","ogg","flac","aac"].includes(e))          return <Music    size={size} className="text-pink-500" />;
-  if (["zip","tar","gz","rar","7z"].includes(e))             return <Archive  size={size} className="text-amber-500" />;
-  if (["xls","xlsx","csv"].includes(e))                      return <Table2   size={size} className="text-green-500" />;
-  if (["doc","docx"].includes(e))                            return <FileText size={size} className="text-blue-600" />;
-  if (["js","ts","jsx","tsx","py","rb","go","rs"].includes(e))return <Code    size={size} className="text-cyan-500" />;
+  if (["pdf"].includes(e))                                   return <FileText size={size} className="text-orange-600" />;
+  if (["jpg","jpeg","png","gif","svg","webp","bmp"].includes(e)) return <ImageIcon size={size} className="text-green-600" />;
+  if (["mp4","mov","avi","mkv","webm"].includes(e))          return <Video    size={size} className="text-orange-500" />;
+  if (["mp3","wav","ogg","flac","aac"].includes(e))          return <Music    size={size} className="text-green-500" />;
+  if (["zip","tar","gz","rar","7z"].includes(e))             return <Archive  size={size} className="text-orange-600" />;
+  if (["xls","xlsx","csv"].includes(e))                      return <Table2   size={size} className="text-green-600" />;
+  if (["doc","docx"].includes(e))                            return <FileText size={size} className="text-orange-500" />;
+  if (["js","ts","jsx","tsx","py","rb","go","rs"].includes(e))return <Code    size={size} className="text-green-600" />;
   return <File size={size} className="text-gray-400" />;
 }
 
 function ExtBadge({ ext }: { ext: string }) {
   return (
-    <span className="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-gray-500 dark:bg-zinc-700 dark:text-gray-400">
+    <span className="rounded-md bg-linear-to-r from-green-50 to-orange-50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-green-700 ring-1 ring-green-100 dark:from-green-950/30 dark:to-orange-950/30 dark:text-green-400 dark:ring-green-900/40">
       {ext}
     </span>
   );
@@ -210,7 +202,7 @@ function FolderRow({
 
   return (
     <div>
-      <div className={`flex w-full items-center gap-1.5 py-2.5 pr-2 transition-colors hover:bg-gray-50 dark:hover:bg-zinc-800/60 sm:gap-2 sm:pr-3 ${folderPl(depth)}`}>
+      <div className={`flex w-full items-center gap-1.5 py-3 pr-2 transition-colors hover:bg-linear-to-r hover:from-green-50/70 hover:to-orange-50/50 dark:hover:from-green-950/15 dark:hover:to-orange-950/10 sm:gap-2 sm:pr-3 ${folderPl(depth)}`}>
         <button
           type="button"
           onClick={() => setOpen((p) => !p)}
@@ -220,9 +212,16 @@ function FolderRow({
             ? <ChevronDown size={12} className="shrink-0 text-gray-400" />
             : <ChevronRight size={12} className="shrink-0 text-gray-400" />}
           {open
-            ? <FolderOpen size={15} className="shrink-0 text-amber-500" />
-            : <Folder size={15} className="shrink-0 text-amber-500" />}
-          <span className="flex-1 truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{node.name}</span>
+            ? <FolderOpen size={15} className="shrink-0 text-orange-500" />
+            : <Folder size={15} className="shrink-0 text-orange-500" />}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-gray-800 dark:text-gray-200">{node.name}</span>
+            {downloadedFolder && (
+              <span className="mt-0.5 flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-400">
+                <Check size={10} strokeWidth={3} /> Folder downloaded
+              </span>
+            )}
+          </span>
           <span className="mr-1 hidden shrink-0 text-[11px] text-gray-400 sm:inline">
             {totalFiles} file{totalFiles !== 1 ? "s" : ""}
           </span>
@@ -232,12 +231,14 @@ function FolderRow({
             type="button"
             disabled={downloadingFolder}
             onClick={handleFolderDownload}
-            title={`Download ${node.name} as ZIP`}
-            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-60 sm:h-8 sm:w-8 ${downloadedFolder ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white dark:bg-orange-900/20 dark:hover:bg-orange-500"}`}
+            title={downloadedFolder ? `Download ${node.name} again` : `Download ${node.name} as ZIP`}
+            className={`flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2.5 text-[10px] font-bold transition-all disabled:opacity-60 sm:h-8 sm:text-xs ${downloadedFolder ? "bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400" : "bg-orange-50 text-orange-600 hover:bg-linear-to-br hover:from-[rgb(73,140,1)] hover:to-orange-500 hover:text-white dark:bg-orange-900/20"}`}
           >
             {downloadingFolder
-              ? <Loader2 size={12} className="animate-spin" />
-              : downloadedFolder ? <Check size={14} strokeWidth={3} /> : <Download size={12} />}
+              ? <><Loader2 size={12} className="animate-spin" /> Preparing…</>
+              : downloadedFolder
+                ? <><RefreshCw size={12} /> Download again</>
+                : <><Download size={12} /> Download</>}
           </button>
         )}
       </div>
@@ -288,9 +289,9 @@ function FileRow({
 }) {
   return (
     <div
-      className={`flex items-start gap-2 border-b border-gray-100/80 py-3 pr-2 transition-colors last:border-0 hover:bg-gray-50/60 dark:border-zinc-800/60 dark:hover:bg-zinc-800/40 sm:gap-3 sm:pr-5 ${filePl(depth)}`}
+      className={`flex items-start gap-2 border-b border-green-100/70 py-3 pr-2 transition-colors last:border-0 hover:bg-linear-to-r hover:from-green-50/60 hover:to-orange-50/40 dark:border-green-900/20 dark:hover:from-green-950/15 dark:hover:to-orange-950/10 sm:gap-3 sm:pr-5 ${filePl(depth)}`}
     >
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gray-100 dark:bg-zinc-800 sm:h-9 sm:w-9 sm:rounded-xl">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-linear-to-br from-green-50 to-orange-50 ring-1 ring-green-100 dark:from-green-950/30 dark:to-orange-950/30 dark:ring-green-900/30 sm:h-9 sm:w-9 sm:rounded-xl">
         <FileIcon ext={file.extension} />
       </div>
       <div className="min-w-0 flex-1">
@@ -299,17 +300,24 @@ function FileRow({
           <p className="text-xs text-gray-500">{formatBytes(file.size)}</p>
           <ExtBadge ext={file.extension} />
         </div>
+        {downloaded && (
+          <p className="mt-1 flex items-center gap-1 text-[10px] font-bold text-green-700 dark:text-green-400">
+            <Check size={10} strokeWidth={3} /> File downloaded
+          </p>
+        )}
       </div>
       <button
         type="button"
         disabled={downloading === file.id}
         onClick={() => onDownload(file.id, file.name)}
-        title={downloaded ? `${file.name} download started` : `Download ${file.name}`}
-        className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-all disabled:opacity-60 sm:h-8 sm:w-8 ${downloaded ? "bg-emerald-50 text-emerald-600 hover:bg-emerald-100" : "bg-orange-50 text-orange-500 hover:bg-orange-500 hover:text-white dark:bg-orange-900/20 dark:hover:bg-orange-500"}`}
+        title={downloaded ? `Download ${file.name} again` : `Download ${file.name}`}
+        className={`flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl px-2.5 text-[10px] font-bold transition-all disabled:opacity-60 sm:h-8 sm:text-xs ${downloaded ? "bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-900/20 dark:text-green-400" : "bg-orange-50 text-orange-600 hover:bg-linear-to-br hover:from-[rgb(73,140,1)] hover:to-orange-500 hover:text-white dark:bg-orange-900/20"}`}
       >
         {downloading === file.id
-          ? <Loader2 size={14} className="animate-spin" />
-          : downloaded ? <Check size={15} strokeWidth={3} /> : <Download size={14} />}
+          ? <><Loader2 size={13} className="animate-spin" /> Preparing…</>
+          : downloaded
+            ? <><RefreshCw size={12} /> Download again</>
+            : <><Download size={13} /> Download</>}
       </button>
     </div>
   );
@@ -448,55 +456,72 @@ export default function PublicTransferPage() {
   /* ── Loading ── */
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-zinc-950">
-        <div className="flex flex-col items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-            <Send size={20} />
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-linear-to-br from-green-50 via-white to-orange-50 p-4 dark:from-green-950/30 dark:via-zinc-950 dark:to-orange-950/20">
+        <div className="pointer-events-none absolute -left-20 top-10 h-72 w-72 rounded-full bg-green-300/20 blur-3xl dark:bg-green-700/10" />
+        <div className="pointer-events-none absolute -right-20 bottom-10 h-72 w-72 rounded-full bg-orange-300/25 blur-3xl dark:bg-orange-700/10" />
+        <div className="relative flex w-full max-w-xs flex-col items-center gap-5 rounded-3xl border border-white/80 bg-white/85 px-8 py-10 text-center shadow-2xl shadow-green-900/10 backdrop-blur-xl dark:border-zinc-800 dark:bg-zinc-900/85">
+          <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-linear-to-br from-[rgb(73,140,1)] to-orange-500 text-white shadow-xl shadow-green-700/20">
+            <Send size={24} />
+            <Loader2 size={20} className="absolute -bottom-2 -right-2 animate-spin rounded-full bg-white p-0.5 text-orange-500 shadow-md dark:bg-zinc-900" />
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <Loader2 size={26} className="animate-spin text-orange-500" />
-            <p className="text-sm text-gray-500 dark:text-gray-400">Loading transfer…</p>
+          <div>
+            <p className="text-base font-extrabold text-gray-900 dark:text-white">Opening your transfer</p>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Checking the secure link and preparing your files…</p>
+          </div>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-green-100 dark:bg-green-950/40">
+            <div className="h-full w-2/3 animate-pulse rounded-full bg-linear-to-r from-[rgb(73,140,1)] to-orange-500" />
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   /* ── Hard error ── */
   if (error) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 p-4 dark:bg-zinc-950">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-          <Send size={18} />
-        </div>
-        <div className="w-full max-w-sm text-center">
-          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-900/20">
-            <XCircle size={36} className="text-red-400" />
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-linear-to-br from-green-50 via-white to-orange-50 p-4 dark:from-green-950/30 dark:via-zinc-950 dark:to-orange-950/20">
+        <div className="pointer-events-none absolute -left-24 top-12 h-72 w-72 rounded-full bg-green-300/20 blur-3xl dark:bg-green-700/10" />
+        <div className="pointer-events-none absolute -right-24 bottom-10 h-80 w-80 rounded-full bg-orange-300/25 blur-3xl dark:bg-orange-700/10" />
+        <div className="relative w-full max-w-md">
+          <BrandHeader />
+          <div className="mt-4 overflow-hidden rounded-3xl border border-orange-200/70 bg-white/90 shadow-2xl shadow-orange-900/10 backdrop-blur-xl dark:border-orange-900/30 dark:bg-zinc-900/90">
+            <div className="h-1.5 bg-linear-to-r from-[rgb(73,140,1)] via-green-500 to-orange-500" />
+            <div className="px-6 py-9 text-center sm:px-9">
+              <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-linear-to-br from-orange-50 to-green-50 ring-1 ring-orange-200 dark:from-orange-950/30 dark:to-green-950/20 dark:ring-orange-900/40">
+                <XCircle size={36} className="text-orange-500" />
+              </div>
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.2em] text-orange-500">Secure link status</p>
+              <h1 className="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Transfer unavailable</h1>
+              <p className="mx-auto mt-3 max-w-sm text-sm leading-6 text-gray-500 dark:text-gray-400">{error}</p>
+              <div className="mt-7 inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 ring-1 ring-green-100 dark:bg-green-950/20 dark:text-green-400 dark:ring-green-900/30">
+                <Shield size={12} /> Protected by Jai Export Enterprises
+              </div>
+            </div>
           </div>
-          <h1 className="mb-2 text-xl font-bold text-gray-900 dark:text-white">Transfer Unavailable</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">{error}</p>
-          <p className="mt-6 text-xs text-gray-400">Powered by <span className="company-name">Jai Export Enterprises</span> · Cloudflare R2</p>
         </div>
-      </div>
+      </main>
     );
   }
 
   /* ── Password gate ── */
   if (transfer?.hasPassword && !unlocked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-linear-to-br from-orange-50 via-amber-50/40 to-white p-3 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 sm:p-4">
-        <div className="w-full max-w-sm">
-          <div className="mb-5 sm:mb-7"><BrandHeader /></div>
+      <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-linear-to-br from-green-50 via-white to-orange-50 p-3 dark:from-green-950/30 dark:via-zinc-950 dark:to-orange-950/20 sm:p-4">
+        <div className="pointer-events-none absolute -left-20 top-10 h-72 w-72 rounded-full bg-green-300/20 blur-3xl dark:bg-green-700/10" />
+        <div className="pointer-events-none absolute -right-20 bottom-10 h-80 w-80 rounded-full bg-orange-300/25 blur-3xl dark:bg-orange-700/10" />
+        <div className="relative w-full max-w-md">
+          <div className="mb-4"><BrandHeader /></div>
 
-          <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-2xl shadow-gray-200/60 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none sm:rounded-3xl">
-            <div className="h-1 w-full bg-linear-to-r from-orange-500 via-amber-400 to-orange-400" />
-            <div className="px-5 py-6 sm:px-7 sm:py-8">
-              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-orange-50 dark:bg-orange-900/20">
-                <Lock size={28} className="text-orange-500" />
+          <div className="overflow-hidden rounded-3xl border border-green-200/70 bg-white/90 shadow-2xl shadow-green-900/10 backdrop-blur-xl dark:border-green-900/30 dark:bg-zinc-900/90">
+            <div className="h-1.5 w-full bg-linear-to-r from-[rgb(73,140,1)] via-green-500 to-orange-500" />
+            <div className="px-5 py-7 sm:px-8 sm:py-9">
+              <div className="mx-auto mb-5 flex h-18 w-18 items-center justify-center rounded-3xl bg-linear-to-br from-[rgb(73,140,1)] to-orange-500 text-white shadow-xl shadow-green-700/20">
+                <Lock size={29} />
               </div>
-              <h1 className="mb-1 text-center text-xl font-extrabold text-gray-900 dark:text-white">Password Protected</h1>
-              <p className="mb-6 text-center text-sm text-gray-500 dark:text-gray-400">
-                This transfer requires a password to access.
+              <p className="mb-2 text-center text-xs font-bold uppercase tracking-[0.2em] text-green-700 dark:text-green-400">Private transfer</p>
+              <h1 className="text-center text-2xl font-black tracking-tight text-gray-900 dark:text-white">Password protected</h1>
+              <p className="mx-auto mb-7 mt-2 max-w-xs text-center text-sm leading-6 text-gray-500 dark:text-gray-400">
+                Enter the password shared by the sender to securely access these files.
               </p>
 
               <div className="relative mb-2">
@@ -507,7 +532,7 @@ export default function PublicTransferPage() {
                   onKeyDown={(e) => e.key === "Enter" && handleUnlock()}
                   placeholder="Enter password"
                   autoFocus
-                  className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 pr-12 text-sm outline-none transition-all focus:border-orange-400 focus:bg-white focus:ring-3 focus:ring-orange-500/10 dark:border-zinc-700 dark:bg-zinc-800 dark:text-white"
+                  className="h-13 w-full rounded-2xl border border-green-200 bg-green-50/50 px-4 pr-12 text-sm outline-none transition-all placeholder:text-gray-400 focus:border-orange-400 focus:bg-white focus:ring-3 focus:ring-orange-500/10 dark:border-green-900/40 dark:bg-green-950/10 dark:text-white"
                 />
                 <button type="button" onClick={() => setShowPassword((p) => !p)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -523,17 +548,17 @@ export default function PublicTransferPage() {
               )}
 
               <button type="button" disabled={!password.trim() || unlocking} onClick={handleUnlock}
-                className="mt-2 flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-orange-500 font-bold text-white shadow-sm shadow-orange-500/25 transition-all hover:bg-orange-600 hover:shadow-md disabled:opacity-60">
+                className="mt-3 flex h-13 w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-[rgb(73,140,1)] via-green-600 to-orange-500 font-bold text-white shadow-lg shadow-green-700/20 transition-all hover:-translate-y-0.5 hover:shadow-xl hover:shadow-orange-500/20 disabled:translate-y-0 disabled:opacity-60">
                 {unlocking ? <Loader2 size={16} className="animate-spin" /> : <Lock size={16} />}
                 {unlocking ? "Unlocking…" : "Unlock Transfer"}
               </button>
             </div>
           </div>
-          <p className="mt-5 text-center text-xs text-gray-400 dark:text-gray-600">
-            Files stored securely on Cloudflare R2
-          </p>
+          <div className="mt-5 flex items-center justify-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+            <Shield size={12} className="text-green-600" /> Files stored securely on Cloudflare R2
+          </div>
         </div>
-      </div>
+      </main>
     );
   }
 
@@ -552,17 +577,20 @@ export default function PublicTransferPage() {
      MAIN PUBLIC TRANSFER PAGE
   ══════════════════════════════════════════ */
   return (
-    <div className="min-h-screen overflow-x-hidden bg-linear-to-br from-orange-50/60 via-gray-50 to-white p-3 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 sm:p-5 lg:p-8">
-      <div className="mx-auto max-w-2xl py-5 sm:py-8 lg:py-10">
+    <main className="relative min-h-screen overflow-x-hidden bg-linear-to-br from-green-50 via-white to-orange-50 p-3 dark:from-green-950/25 dark:via-zinc-950 dark:to-orange-950/20 sm:p-5 lg:p-8">
+      <div className="pointer-events-none absolute -left-36 top-20 h-96 w-96 rounded-full bg-green-300/20 blur-3xl dark:bg-green-700/10" />
+      <div className="pointer-events-none absolute -right-36 top-1/3 h-96 w-96 rounded-full bg-orange-300/25 blur-3xl dark:bg-orange-700/10" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-linear-to-r from-[rgb(73,140,1)] via-green-500 to-orange-500" />
+      <div className="relative mx-auto max-w-4xl py-3 sm:py-5 lg:py-7">
 
         {/* Brand header */}
         <div className="mb-5 sm:mb-7"><BrandHeader /></div>
 
         {/* Main card */}
-        <div className="overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-2xl shadow-gray-200/40 dark:border-zinc-800 dark:bg-zinc-900 dark:shadow-none sm:rounded-3xl">
+        <div className="overflow-hidden rounded-3xl border border-green-200/70 bg-white/90 shadow-2xl shadow-green-900/10 backdrop-blur-xl dark:border-green-900/30 dark:bg-zinc-900/90">
 
           {/* Top accent */}
-          <div className="h-1 w-full bg-linear-to-r from-orange-500 via-amber-400 to-orange-400" />
+          <div className="h-1.5 w-full bg-linear-to-r from-[rgb(73,140,1)] via-green-500 to-orange-500" />
 
           {/* Status banners */}
           {isExpired && (
@@ -578,31 +606,48 @@ export default function PublicTransferPage() {
             </div>
           )}
           {canDownload && daysLeft !== null && daysLeft <= 2 && (
-            <div className="flex items-center gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/30 dark:bg-amber-900/10 sm:gap-3 sm:px-5">
-              <AlertTriangle size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
-              <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 sm:text-sm">
+            <div className="flex items-center gap-2.5 border-b border-orange-200 bg-orange-50 px-4 py-3 dark:border-orange-900/30 dark:bg-orange-900/10 sm:gap-3 sm:px-5">
+              <AlertTriangle size={14} className="shrink-0 text-orange-600 dark:text-orange-400" />
+              <p className="text-xs font-semibold text-orange-700 dark:text-orange-400 sm:text-sm">
                 Expires {daysLeft === 0 ? "today" : `in ${daysLeft} day${daysLeft !== 1 ? "s" : ""}`}
               </p>
             </div>
           )}
 
           {/* Transfer header */}
-          <div className="border-b border-gray-100 px-4 py-4 dark:border-zinc-800 sm:px-6 sm:py-5">
-            <div className="flex items-start gap-3 sm:gap-4">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-orange-500 text-white shadow-md shadow-orange-500/20 sm:h-12 sm:w-12 sm:rounded-2xl">
-                <CheckCircle size={20} />
+          <div className="relative overflow-hidden border-b border-green-100 bg-linear-to-br from-green-50 via-white to-orange-50 px-4 py-6 dark:border-green-900/25 dark:from-green-950/25 dark:via-zinc-900 dark:to-orange-950/20 sm:px-7 sm:py-8">
+            <div className="pointer-events-none absolute -right-12 -top-14 h-40 w-40 rounded-full border border-orange-200/50 bg-orange-100/30 dark:border-orange-900/20 dark:bg-orange-900/10" />
+            <div className="relative flex items-start gap-3 sm:gap-5">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-[rgb(73,140,1)] to-orange-500 text-white shadow-xl shadow-green-700/20 sm:h-15 sm:w-15">
+                <CloudUpload size={23} />
               </div>
               <div className="min-w-0 flex-1">
                 <div>
-                  <h1 className="break-words text-base font-extrabold leading-tight text-gray-900 dark:text-white sm:text-lg">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-green-700 shadow-sm ring-1 ring-green-100 dark:bg-zinc-900 dark:text-green-400 dark:ring-green-900/40">
+                      <Shield size={11} /> Secure transfer
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-orange-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-orange-700 ring-1 ring-orange-200 dark:bg-orange-900/20 dark:text-orange-400 dark:ring-orange-900/40">
+                      <CheckCircle size={11} /> Ready
+                    </span>
+                  </div>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-green-700 dark:text-green-400">Subject</p>
+                  <h1 className="mt-1 break-words text-xl font-black leading-tight tracking-tight text-gray-900 dark:text-white sm:text-3xl">
                     {transfer.subject ?? transfer.title ?? "Files for you"}
                   </h1>
+                  {transfer.title && transfer.subject && transfer.title !== transfer.subject && (
+                    <div className="mt-3 inline-flex max-w-full items-center gap-2 rounded-xl border border-orange-100 bg-white/80 px-3 py-2 text-sm shadow-sm dark:border-orange-900/30 dark:bg-zinc-900/70">
+                      <FileText size={13} className="shrink-0 text-orange-500" />
+                      <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider text-orange-500">Title</span>
+                      <span className="min-w-0 truncate font-semibold text-gray-700 dark:text-gray-300">{transfer.title}</span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Sender info */}
                 {(transfer.senderName || transfer.senderEmail) && (
                   <div className="mt-2 flex items-center gap-2">
-                    <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-orange-100 text-[10px] font-bold text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-green-100 to-orange-100 text-[10px] font-black text-green-700 ring-1 ring-green-200 dark:from-green-950/40 dark:to-orange-950/30 dark:text-green-400 dark:ring-green-900/40">
                       {senderInitials !== "?" ? senderInitials : <UserIcon size={11} />}
                     </div>
                     <p className="min-w-0 break-words text-sm text-gray-500 dark:text-gray-400">
@@ -617,26 +662,28 @@ export default function PublicTransferPage() {
                   </div>
                 )}
 
-                <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-400">
-                  <span className="flex items-center gap-1">
-                    <CloudUpload size={10} className="text-sky-500" />
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-xs">
+                  <span className="flex items-center gap-1.5 rounded-lg bg-green-100/70 px-2.5 py-1.5 font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                    <File size={11} />
                     {transfer.fileCount} file{transfer.fileCount !== 1 ? "s" : ""}
                     {hasFolders && ` in ${folders.length} folder${folders.length !== 1 ? "s" : ""}`}
                   </span>
-                  <span>{formatBytes(transfer.totalSize)}</span>
+                  <span className="flex items-center gap-1.5 rounded-lg bg-orange-100/70 px-2.5 py-1.5 font-semibold text-orange-700 dark:bg-orange-900/20 dark:text-orange-400">
+                    <CloudUpload size={11} /> {formatBytes(transfer.totalSize)}
+                  </span>
                   {transfer.hasPassword && (
-                    <span className="flex items-center gap-1 text-orange-500">
-                      <Shield size={10} /> Protected
+                    <span className="flex items-center gap-1.5 rounded-lg bg-green-100/70 px-2.5 py-1.5 font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                      <Lock size={11} /> Protected
                     </span>
                   )}
                   {canDownload && daysLeft !== null && daysLeft > 0 && (
-                    <span className="flex items-center gap-1">
-                      <Clock size={10} /> {daysLeft}d left
+                    <span className="flex items-center gap-1.5 rounded-lg bg-orange-100/70 px-2.5 py-1.5 font-semibold text-orange-700 dark:bg-orange-900/20 dark:text-orange-400">
+                      <Clock size={11} /> {daysLeft}d left
                     </span>
                   )}
                   {transfer.expiresAt && !isExpired && (
-                    <span className="flex items-center gap-1">
-                      <Clock size={10} /> Expires {formatDate(transfer.expiresAt)}
+                    <span className="flex items-center gap-1.5 rounded-lg bg-green-100/70 px-2.5 py-1.5 font-semibold text-green-700 dark:bg-green-900/20 dark:text-green-400">
+                      <Clock size={11} /> Expires {formatDate(transfer.expiresAt)}
                     </span>
                   )}
                 </div>
@@ -644,16 +691,27 @@ export default function PublicTransferPage() {
             </div>
 
             {transfer.message && (
-              <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50/60 px-4 py-3 dark:border-zinc-700/60 dark:bg-zinc-800/50">
-                <p className="text-sm italic leading-relaxed text-gray-600 dark:text-gray-400">
-                  &ldquo;{transfer.message}&rdquo;
+              <div className="relative mt-5 rounded-2xl border border-orange-200/70 bg-white/80 px-4 py-3.5 shadow-sm dark:border-orange-900/30 dark:bg-zinc-900/70">
+                <div className="absolute inset-y-3 left-0 w-1 rounded-r-full bg-linear-to-b from-[rgb(73,140,1)] to-orange-500" />
+                <p className="mb-1 pl-1 text-[10px] font-bold uppercase tracking-[0.18em] text-orange-500">Message</p>
+                <p className="whitespace-pre-wrap pl-1 text-sm leading-relaxed text-gray-600 dark:text-gray-300">
+                  {transfer.message}
                 </p>
               </div>
             )}
           </div>
 
           {/* File / folder tree */}
-          <div className="divide-y divide-gray-100/80 dark:divide-zinc-800/60">
+          <div className="flex items-center justify-between gap-3 border-b border-green-100 px-4 py-3.5 dark:border-green-900/25 sm:px-6">
+            <div>
+              <p className="text-sm font-extrabold text-gray-900 dark:text-white">Files in this transfer</p>
+              <p className="mt-0.5 text-xs text-gray-400">Download individual items or complete folders</p>
+            </div>
+            <span className="rounded-full bg-linear-to-r from-green-100 to-orange-100 px-3 py-1 text-xs font-bold text-green-700 ring-1 ring-green-200 dark:from-green-950/30 dark:to-orange-950/30 dark:text-green-400 dark:ring-green-900/30">
+              {transfer.fileCount}
+            </span>
+          </div>
+          <div className="divide-y divide-green-100/70 dark:divide-green-900/20">
             {folders.map((folder) => (
               <FolderRow
                 key={folder.path}
@@ -678,11 +736,20 @@ export default function PublicTransferPage() {
                 onDownload={canDownload ? handleDownload : () => {}}
               />
             ))}
+            {transfer.files.length === 0 && (
+              <div className="flex flex-col items-center px-5 py-12 text-center">
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-linear-to-br from-green-50 to-orange-50 text-orange-500 ring-1 ring-orange-100 dark:from-green-950/20 dark:to-orange-950/20 dark:ring-orange-900/30">
+                  <File size={20} />
+                </div>
+                <p className="text-sm font-bold text-gray-700 dark:text-gray-300">No files available</p>
+                <p className="mt-1 text-xs text-gray-400">This transfer does not contain downloadable files.</p>
+              </div>
+            )}
           </div>
 
           {/* Download error banner */}
           {downloadError && (
-            <div className="flex items-start gap-2.5 border-t border-red-100 bg-red-50 px-4 py-3 dark:border-red-900/20 dark:bg-red-900/10 sm:items-center sm:gap-3 sm:px-5">
+            <div role="alert" className="flex items-start gap-2.5 border-t border-red-100 bg-red-50 px-4 py-3 dark:border-red-900/20 dark:bg-red-900/10 sm:items-center sm:gap-3 sm:px-5">
               <AlertCircle size={14} className="shrink-0 text-red-500" />
               <p className="min-w-0 flex-1 break-words text-xs font-medium text-red-600 dark:text-red-400 sm:text-sm">{downloadError}</p>
               <button type="button" aria-label="Dismiss error" onClick={() => setDownloadError(null)}
@@ -694,26 +761,47 @@ export default function PublicTransferPage() {
 
           {/* Actions footer */}
           {canDownload && (
-            <div className="border-t border-gray-100 px-3 py-3 dark:border-zinc-800 sm:px-5 sm:py-4">
+            <div className="border-t border-green-100 bg-linear-to-r from-green-50/60 via-white to-orange-50/60 px-3 py-4 dark:border-green-900/25 dark:from-green-950/15 dark:via-zinc-900 dark:to-orange-950/15 sm:px-6 sm:py-5">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-extrabold text-gray-900 dark:text-white">
+                    {downloadedAll
+                      ? "All files downloaded"
+                      : transfer.files.length === 1 && downloadedFiles.has(transfer.files[0].id)
+                        ? "File downloaded"
+                        : "Ready to download"}
+                  </p>
+                  <p className="mt-0.5 text-xs text-gray-400">
+                    {downloadedAll || (transfer.files.length === 1 && downloadedFiles.has(transfer.files[0].id))
+                      ? "You can download again whenever needed."
+                      : `Secure access to ${formatBytes(transfer.totalSize)}`}
+                  </p>
+                </div>
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-linear-to-br from-green-100 to-orange-100 text-green-700 ring-1 ring-green-200 dark:from-green-950/30 dark:to-orange-950/20 dark:text-green-400 dark:ring-green-900/30">
+                  {downloadedAll || (transfer.files.length === 1 && downloadedFiles.has(transfer.files[0].id))
+                    ? <Check size={17} strokeWidth={3} />
+                    : <Download size={17} />}
+                </div>
+              </div>
               {transfer.files.length > 1 ? (
                 <button type="button" onClick={handleDownloadAll} disabled={downloadingAll}
-                  className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-center text-sm font-bold text-white shadow-md transition-all disabled:opacity-70 sm:gap-2.5 sm:rounded-2xl sm:text-base ${downloadedAll ? "bg-emerald-600 shadow-emerald-500/20 hover:bg-emerald-700" : "bg-orange-500 shadow-orange-500/20 hover:bg-orange-600 hover:shadow-lg hover:shadow-orange-500/30"}`}>
+                  className={`flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-center text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-70 sm:gap-2.5 sm:text-base ${downloadedAll ? "bg-green-700 shadow-green-700/20 hover:bg-green-800" : "bg-linear-to-r from-[rgb(62,120,1)] via-green-600 to-orange-500 shadow-green-700/20 hover:shadow-xl hover:shadow-orange-500/25"}`}>
                   {downloadingAll
                     ? <><Loader2 size={16} className="animate-spin" /> Preparing ZIP…</>
                     : downloadedAll
-                      ? <><Check size={17} strokeWidth={3} /> Downloaded</>
-                      : <><Download size={16} /> Download All as ZIP · {formatBytes(transfer.totalSize)}</>}
+                      ? <><RefreshCw size={16} /> Download again</>
+                      : <><Download size={16} /> Download all as ZIP · {formatBytes(transfer.totalSize)}</>}
                 </button>
               ) : (
                 transfer.files[0] && (
                   <button type="button"
                     disabled={downloading === transfer.files[0].id}
                     onClick={() => handleDownload(transfer.files[0].id, transfer.files[0].name)}
-                    className={`flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-center text-sm font-bold text-white shadow-md transition-all disabled:opacity-70 sm:gap-2.5 sm:rounded-2xl sm:text-base ${downloadedFiles.has(transfer.files[0].id) ? "bg-emerald-600 shadow-emerald-500/20 hover:bg-emerald-700" : "bg-orange-500 shadow-orange-500/20 hover:bg-orange-600"}`}>
+                    className={`flex min-h-13 w-full items-center justify-center gap-2 rounded-2xl px-3 py-3 text-center text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 disabled:translate-y-0 disabled:opacity-70 sm:gap-2.5 sm:text-base ${downloadedFiles.has(transfer.files[0].id) ? "bg-green-700 shadow-green-700/20 hover:bg-green-800" : "bg-linear-to-r from-[rgb(62,120,1)] via-green-600 to-orange-500 shadow-green-700/20 hover:shadow-xl hover:shadow-orange-500/25"}`}>
                     {downloading === transfer.files[0].id
                       ? <><Loader2 size={16} className="animate-spin" /> Preparing…</>
                       : downloadedFiles.has(transfer.files[0].id)
-                        ? <><Check size={17} strokeWidth={3} /> Downloaded</>
+                        ? <><RefreshCw size={16} /> Download again</>
                         : <><Download size={16} /> Download · {formatBytes(transfer.files[0].size)}</>}
                   </button>
                 )
@@ -729,21 +817,21 @@ export default function PublicTransferPage() {
         </div>
 
         {/* Security badges */}
-        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 px-2 text-[11px] text-gray-400 dark:text-gray-600 sm:mt-6 sm:gap-x-4 sm:text-xs">
-          <span className="flex items-center gap-1">
-            <Shield size={11} className="text-emerald-500" /> End-to-end encrypted
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 rounded-2xl border border-white/80 bg-white/60 px-4 py-3 text-[11px] text-gray-500 shadow-sm backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/60 dark:text-gray-400 sm:mt-6 sm:gap-x-4 sm:text-xs">
+          <span className="flex items-center gap-1.5">
+            <Shield size={11} className="text-green-600" /> End-to-end encrypted
           </span>
-          <span className="hidden sm:inline">·</span>
-          <span className="flex items-center gap-1">
-            <CloudUpload size={11} className="text-sky-500" /> Cloudflare R2
+          <span className="hidden text-orange-300 sm:inline">·</span>
+          <span className="flex items-center gap-1.5">
+            <CloudUpload size={11} className="text-orange-500" /> Cloudflare R2
           </span>
-          <span className="hidden sm:inline">·</span>
-          <span className="flex items-center gap-1">
-            <Sparkles size={11} className="text-orange-400" /> <span className="company-name">Jai Export Enterprises</span>
+          <span className="hidden text-green-300 sm:inline">·</span>
+          <span className="flex items-center gap-1.5">
+            <Sparkles size={11} className="text-orange-500" /> <span className="company-name">Jai Export Enterprises</span>
           </span>
         </div>
 
       </div>
-    </div>
+    </main>
   );
 }

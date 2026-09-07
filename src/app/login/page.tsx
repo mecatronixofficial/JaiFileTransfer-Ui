@@ -1,5 +1,6 @@
 "use client";
 
+import BrandLogo from "@/components/ui/BrandLogo";
 import { useState, useEffect, useId, useRef, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -326,31 +327,30 @@ export default function LoginPage() {
                   />
                 </span>
               </span>
-              <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl border border-gray-200 bg-white p-2 shadow-md shadow-gray-200/50">
-                <Image
-                  src={Img_Helper.logo.jai_logo}
-                  alt=""
-                  aria-hidden="true"
-                  width={50}
-                  height={34}
-                  className="h-auto w-full object-contain"
-                />
-              </span>
+              <BrandLogo className="h-14 w-14" />
             </Link>
           </header>
 
           <div className="flex min-h-fit flex-1 flex-col justify-center py-2 xl:py-3 2xl:py-4">
             <div className="max-w-2xl">
 
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h1 className="company-name mt-5 text-[2.5rem] leading-[1.03] tracking-[0.01em] text-slate-950 font-bold">
-                  <span className="block bg-gradient-to-r from-[rgb(221,155,2)] via-orange-500 to-orange-500 bg-clip-text text-4xl text-transparent">
+              <div className="mt-5 flex items-center gap-3">
+                <div aria-hidden="true" className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-orange-200 bg-orange-50 text-orange-600 shadow-sm xl:h-14 xl:w-14">
+                  <FolderLock className="h-6 w-6 xl:h-7 xl:w-7" strokeWidth={1.5} />
+                  <span className="absolute -bottom-1 -right-1 flex h-5 w-5 items-center justify-center rounded-md bg-[rgb(73,140,1)] text-white ring-2 ring-white">
+                    <ArrowRight className="h-3 w-3" />
+                  </span>
+                </div>
+                <div className="min-w-0">
+                <h1 className="company-name flex flex-col items-start gap-0.5 font-bold uppercase">
+                  <span className="block text-xl leading-tight tracking-[-0.025em] text-orange-600 xl:text-2xl">
                     JAI EXPORT
                   </span>
-                  <span className="block bg-gradient-to-r from-[rgb(73,140,1)] via-lime-600 to-lime-500 bg-clip-text text-3xl text-transparent">
+                  <span className="block text-[11px] leading-relaxed tracking-[0.2em] text-[rgb(62,120,1)] xl:text-xs">
                     ENTERPRISES
                   </span>
                 </h1>
+                </div>
               </div>
 
               <p className="mt-4 max-w-xl text-sm leading-6 text-slate-600 xl:text-base xl:leading-7">
@@ -423,16 +423,7 @@ export default function LoginPage() {
 
             {/* Mobile logo */}
             <Link href="/" className="mb-4 flex min-w-0 items-center gap-3 sm:mb-5 lg:hidden">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[rgb(73,140,1)] shadow-lg shadow-[rgb(73,140,1)]/25">
-                <Image
-                  src={Img_Helper.logo.jai_logo}
-                  alt=""
-                  width={22}
-                  height={15}
-                  className="h-auto w-[22px] object-contain"
-                  style={{ height: "auto" }}
-                />
-              </span>
+              <BrandLogo className="h-10 w-10" />
               <span className="min-w-0">
                 <span className="company-name block truncate text-sm font-extrabold text-gray-900 min-[380px]:text-base dark:text-white">
                   Jai Export Enterprises

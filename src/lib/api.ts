@@ -8,7 +8,9 @@ import axios, {
 } from "axios";
 import { UPLOAD_LIMITS } from "@/helper/data_helper";
 import { notifyAppDataChanged } from "@/lib/app-events";
-import { getUploadBlockReason, resolveUploadContentType } from "@/lib/file-types";
+import { resolveUploadContentType } from "@/lib/file-types";
+import { runUploadTasks, waitForUploadRetry } from "@/lib/upload-tasks";
+import { getErrorMessage } from "@/lib/error-handler";
 
 /* =========================
    CONFIG
@@ -242,7 +244,7 @@ function getPartUploadErrorMessage(error: unknown, partNumber: number): string {
   }
 
   if (axios.isAxiosError(error) && error.response?.status) {
-    return `Upload part ${partNumber} failed with HTTP ${error.response.status}`;
+    return `Upload part ${partNumber}: ${getErrorMessage(error)}`;
   }
 
   return (error as Error)?.message || `Upload part ${partNumber} failed`;
@@ -319,7 +321,7 @@ export function getApi(): AxiosInstance {
   api = axios.create({
     baseURL: BASE_URL,
     withCredentials: true,
-    timeout: 60000,
+    timeout: 10000,
     headers: {
       "Content-Type": "application/json",
     },
@@ -333,6 +335,11 @@ export function getApi(): AxiosInstance {
     (response) => response,
 
     async (error: AxiosError) => {
+      // Canceled requests have no response, but are not network failures.
+      if (axios.isCancel(error)) {
+        return Promise.reject(error);
+      }
+
       const originalRequest = error.config as RetryableRequest | undefined;
 
       // Network / CORS / timeout (no response at all)
@@ -541,7 +548,7 @@ export const usersApi = {
   }) => getApi().patch("/users/me/workspace-preferences", data),
 
   /** Own storage usage */
-  myStorage: () => getApi().get("/users/me/storage"),
+  myStorage: (signal?: AbortSignal) => getApi().get("/users/me/storage", { signal }),
 
   /** Change own password */
   updatePassword: (data: { currentPassword: string; newPassword: string }) =>
@@ -657,6 +664,7 @@ export const filesApi = {
 
   /** Save multiple file metadata records in one request (after folder upload). */
   batchCreate: async (files: {
+    fileId?: string;
     key: string;
     originalName: string;
     size: number;
@@ -693,9 +701,7 @@ export const uploadApi = {
     onProgress?: UploadProgressCallback,
     signal?: AbortSignal,
   ): Promise<UploadApiResponse> => {
-    const blockedReason = getUploadBlockReason(file.name);
-    if (blockedReason) throw new Error(blockedReason);
-
+    signal?.throwIfAborted();
     if (file.size > UPLOAD_LIMITS.MAX_FILE_BYTES) {
       throw new Error(`File is larger than ${Math.round(UPLOAD_LIMITS.MAX_FILE_BYTES / 1024 ** 3)} GB`);
     }
@@ -744,6 +750,7 @@ export const uploadApi = {
     onProgress?: UploadProgressCallback,
     signal?: AbortSignal,
   ): Promise<UploadApiResponse> => {
+    signal?.throwIfAborted();
     const contentType = resolveUploadContentType(file);
     const requestedPartSize = UPLOAD_LIMITS.PART_SIZE;
     let progressByPart: number[] = [];
@@ -788,7 +795,7 @@ export const uploadApi = {
       progressByPart = new Array(resolvedPartCount).fill(0) as number[];
       const usedPartUrls = new Map<string, number>();
 
-      const partTasks = Array.from({ length: resolvedPartCount }, (_, index) => async () => {
+      const partTasks = Array.from({ length: resolvedPartCount }, (_, index) => async (partSignal: AbortSignal) => {
         const partNumber = index + 1;
         const start = index * resolvedPartSize;
         const end = Math.min(start + resolvedPartSize, file.size);
@@ -796,7 +803,8 @@ export const uploadApi = {
 
         for (let attempt = 1; attempt <= MAX_PART_UPLOAD_RETRIES; attempt += 1) {
           try {
-            const partUrlRes = await uploadApi.getPartUrl({ uploadId, key, partNumber });
+            partSignal.throwIfAborted();
+            const partUrlRes = await uploadApi.getPartUrl({ uploadId, key, partNumber }, partSignal);
             const partUrlData = unwrapData<MultipartPartUrlData>(partUrlRes.data);
             const url = partUrlData.url ?? partUrlData.uploadUrl ?? partUrlData.presignedUrl;
 
@@ -822,7 +830,7 @@ export const uploadApi = {
                   partNumber,
                   chunk,
                 },
-                signal,
+                partSignal,
                 (loaded) => updateProgress(index, loaded),
               );
             } else {
@@ -831,7 +839,7 @@ export const uploadApi = {
                   uploadUrl,
                   chunk,
                   partNumber,
-                  signal,
+                  partSignal,
                   (loaded) => updateProgress(index, loaded),
                 );
               } catch (directError) {
@@ -844,7 +852,7 @@ export const uploadApi = {
                     partNumber,
                     chunk,
                   },
-                  signal,
+                  partSignal,
                   (loaded) => updateProgress(index, loaded),
                 );
               }
@@ -854,31 +862,21 @@ export const uploadApi = {
             return { ETag: etag, PartNumber: partNumber };
           } catch (error) {
             updateProgress(index, 0);
+            partSignal.throwIfAborted();
             if (attempt >= MAX_PART_UPLOAD_RETRIES || !isRetryableUploadError(error)) {
               throw new Error(getPartUploadErrorMessage(error, partNumber));
             }
-            await sleep(PART_UPLOAD_RETRY_BASE_MS * attempt);
+            await waitForUploadRetry(PART_UPLOAD_RETRY_BASE_MS * attempt, partSignal);
           }
         }
 
         throw new Error(`Upload part ${partNumber} failed`);
       });
 
-      const parts: { ETag: string; PartNumber: number }[] = new Array(resolvedPartCount);
-      let next = 0;
-      async function worker() {
-        while (next < partTasks.length) {
-          const index = next++;
-          parts[index] = await partTasks[index]();
-        }
-      }
-
-      await Promise.all(
-        Array.from({ length: Math.min(UPLOAD_LIMITS.MAX_CONCURRENT_PARTS, partTasks.length) }, worker),
-      );
+      const parts = await runUploadTasks(partTasks, UPLOAD_LIMITS.MAX_CONCURRENT_PARTS, signal);
+      signal?.throwIfAborted();
 
       const completeRes = await uploadApi.completeMultipart({ uploadId, key, parts });
-      onProgress?.(100, file.size, file.size);
 
       const completePayload = unwrapData<Record<string, unknown>>(completeRes.data);
       const uploadSessionId =
@@ -895,6 +893,7 @@ export const uploadApi = {
       });
 
       const metadataPayload = unwrapData<Record<string, unknown>>(metadataRes.data);
+      onProgress?.(100, file.size, file.size);
       const normalizedPayload = {
         ...metadataPayload,
         key: (metadataPayload.key as string | undefined) ?? key,
@@ -958,8 +957,8 @@ export const uploadApi = {
   }),
 
   /** Get a presigned URL for uploading a single part (used during multipart). */
-  getPartUrl: (data: { uploadId: string; key: string; partNumber: number }) =>
-    getApi().post("/upload/multipart/part-url", data),
+  getPartUrl: (data: { uploadId: string; key: string; partNumber: number }, signal?: AbortSignal) =>
+    getApi().post("/upload/multipart/part-url", data, { signal }),
 
   /** Upload one multipart chunk through the API when browser-to-R2 PUT is blocked. */
   uploadMultipartPartViaServer: async (
@@ -999,6 +998,7 @@ export const uploadApi = {
   folderUpload: (data: {
     folderName: string;
     parentFolderId?: string;
+    directories?: string[];
     files: { fileName: string; mimeType: string; fileSize: number; relativePath?: string }[];
   }) => getApi().post("/upload/folder", data),
 

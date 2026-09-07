@@ -184,13 +184,6 @@ export const MIME_BY_EXTENSION: Readonly<Record<string, string>> = Object.freeze
 
 const MIME_TYPE_PATTERN = /^[a-z0-9][a-z0-9!#$&^_.+-]*\/[a-z0-9][a-z0-9!#$&^_.+-]*$/i;
 
-const BLOCKED_EXECUTABLE_EXTENSIONS = new Set([
-  "exe", "dll", "msi", "msix", "appx", "appxbundle", "bat", "cmd",
-  "com", "scr", "cpl", "sys", "ps1", "psm1", "vbs", "vbe", "wsf",
-  "wsh", "hta", "lnk", "reg", "pif", "jar", "apk", "ipa", "dmg",
-  "pkg", "deb", "rpm", "appimage",
-]);
-
 export function getFileExtension(fileName: string): string {
   const baseName = fileName.replace(/\\/g, "/").split("/").pop() ?? "";
   const dotIndex = baseName.lastIndexOf(".");
@@ -207,14 +200,6 @@ export function normalizeUploadMimeType(fileName: string, suppliedMimeType?: str
   return browserMimeType && MIME_TYPE_PATTERN.test(browserMimeType)
     ? browserMimeType
     : "application/octet-stream";
-}
-
-export function getUploadBlockReason(fileName: string): string | undefined {
-  const extension = getFileExtension(fileName);
-  if (BLOCKED_EXECUTABLE_EXTENSIONS.has(extension)) {
-    return `Executable and installer files (.${extension}) are not allowed.`;
-  }
-  return undefined;
 }
 
 export function resolveUploadContentType(file: Pick<File, "name" | "type">): string {

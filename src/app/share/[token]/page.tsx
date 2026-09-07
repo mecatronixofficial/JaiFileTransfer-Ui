@@ -1,5 +1,6 @@
 "use client";
 
+import BrandLogo from "@/components/ui/BrandLogo";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
@@ -22,7 +23,6 @@ import {
   Loader2,
   Lock,
   Music,
-  Send,
   Shield,
   Sparkles,
   Table2,
@@ -314,9 +314,7 @@ export default function PublicSharePage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-zinc-950">
         <div className="flex flex-col items-center gap-4">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-            <Send size={20} />
-          </div>
+          <BrandLogo className="h-12 w-12" decorative />
           <div className="flex flex-col items-center gap-2">
             <Loader2 size={26} className="animate-spin text-orange-500" />
             <p className="text-sm text-gray-500 dark:text-gray-400">Loading shared content…</p>
@@ -330,9 +328,7 @@ export default function PublicSharePage() {
   if (error) {
     return (
       <div className="flex min-h-screen flex-col items-center justify-center gap-6 bg-gray-50 p-4 dark:bg-zinc-950">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-          <Send size={18} />
-        </div>
+        <BrandLogo className="h-12 w-12" decorative />
         <div className="w-full max-w-sm text-center">
           <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-3xl bg-red-50 dark:bg-red-900/20">
             <XCircle size={36} className="text-red-400" />
@@ -352,9 +348,7 @@ export default function PublicSharePage() {
         <div className="w-full max-w-sm">
           {/* Brand */}
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/30">
-              <Send size={20} />
-            </div>
+            <BrandLogo className="mx-auto mb-3 h-12 w-12" decorative />
             <p className="company-name text-xs font-bold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
             <p className="mt-1 text-[11px] text-gray-400 dark:text-gray-500">Secure File Access</p>
           </div>
@@ -408,9 +402,7 @@ export default function PublicSharePage() {
 
         {/* Brand header */}
         <div className="mb-7 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-500 text-white shadow-lg shadow-orange-500/25">
-            <Shield size={18} />
-          </div>
+          <BrandLogo className="h-12 w-12" decorative />
           <div>
             <p className="company-name text-sm font-extrabold uppercase tracking-widest text-orange-500">Jai Export Enterprises</p>
             <p className="text-[11px] text-gray-400 dark:text-gray-500">Secure File Access · Cloudflare R2</p>
