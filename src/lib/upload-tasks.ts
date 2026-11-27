@@ -1,3 +1,18 @@
+import { UPLOAD_LIMITS } from "@/helper/data_helper";
+
+/**
+ * How many files to upload at once. Small files are latency-bound, so run many
+ * in parallel; multipart files already open several connections each.
+ */
+export function getFileUploadConcurrency(sizes: number[]): number {
+  if (sizes.length <= 1) return 1;
+  const hasMultipart = sizes.some((size) => size >= UPLOAD_LIMITS.MULTIPART_THRESHOLD);
+  const limit = hasMultipart
+    ? UPLOAD_LIMITS.MAX_CONCURRENT_LARGE_FILES
+    : UPLOAD_LIMITS.MAX_CONCURRENT_SMALL_FILES;
+  return Math.min(limit, sizes.length);
+}
+
 /** Run a bounded set of upload tasks; stop and drain siblings before cleanup. */
 export async function runUploadTasks<T>(
   tasks: ((signal: AbortSignal) => Promise<T>)[],

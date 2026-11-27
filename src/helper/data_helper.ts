@@ -19,12 +19,16 @@ export const UPLOAD_LIMITS = {
   MAX_BATCH_BYTES:      500 * 1024 ** 3,   // 500 GB per batch
   /** Max size per file for a simple server-side upload. */
   SIMPLE_MAX_BYTES:     4 * 1024 * 1024,   // 4 MB, below Vercel Function 4.5 MB payload limit
-  /** Files larger than this trigger multipart upload. */
-  MULTIPART_THRESHOLD:  4 * 1024 * 1024,   // 4 MB, avoids proxying upload bodies through Vercel
-  /** Target size for each multipart part. */
-  PART_SIZE:            64 * 1024 * 1024,  // 64 MB
+  /** Files at or above this size use parallel multipart upload; smaller files use one direct PUT. */
+  MULTIPART_THRESHOLD:  16 * 1024 * 1024,  // 16 MB
+  /** Target size for each multipart part (grown automatically for huge files to stay under 10,000 parts). */
+  PART_SIZE:            16 * 1024 * 1024,  // 16 MB
   /** Max concurrent part uploads per file. */
-  MAX_CONCURRENT_PARTS: 3,
+  MAX_CONCURRENT_PARTS: 6,
+  /** Concurrent files when every file is small. */
+  MAX_CONCURRENT_SMALL_FILES: 6,
+  /** Concurrent files when the batch includes multipart files (each already runs parts in parallel). */
+  MAX_CONCURRENT_LARGE_FILES: 2,
 } as const;
 
 /** Default pagination page size. */

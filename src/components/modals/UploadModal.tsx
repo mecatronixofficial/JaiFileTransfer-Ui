@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { uploadApi, transfersApi, foldersApi } from "@/lib/api";
 import { UPLOAD_LIMITS } from "@/helper/data_helper";
+import { getFileUploadConcurrency } from "@/lib/upload-tasks";
 import { formatBytes } from "@/lib/utils";
 import { showToast } from "@/lib/toast";
 import Button from "../ui/Button";
@@ -157,11 +158,7 @@ function parentPath(path: string): string | null {
 }
 
 function getUploadConcurrency(files: UploadFile[]): number {
-  if (files.length <= 1) return 1;
-  const totalSize = files.reduce((sum, item) => sum + item.file.size, 0);
-  if (totalSize >= 2 * 1024 ** 3) return 1;
-  if (files.some((item) => item.file.size >= UPLOAD_LIMITS.MULTIPART_THRESHOLD)) return 2;
-  return 4;
+  return getFileUploadConcurrency(files.map((item) => item.file.size));
 }
 
 async function pool<T>(tasks: (() => Promise<T>)[], limit: number): Promise<T[]> {

@@ -9,6 +9,7 @@ import {
   useCallback,
   useRef,
   type ReactNode,
+  type MouseEvent,
 } from "react";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -67,6 +68,8 @@ interface NavItem {
   badge?: string | number;
   minRole?: Role;
   maxRole?: Role;
+  /** Clicking the item while already on its page reloads the page fresh. */
+  reloadWhenActive?: boolean;
 }
 
 interface SectionDef {
@@ -107,7 +110,7 @@ const SECTIONS: SectionDef[] = [
     icon: <ArrowLeftRight size={15} />,
     openByDefault: true,
     items: [
-      { href: "/transfers/send", label: "New Transfer", icon: <Plus size={15} /> },
+      { href: "/transfers/send", label: "New Transfer", icon: <Plus size={15} />, reloadWhenActive: true },
       { href: "/transfers", label: "Sent Items", icon: <ArrowUpRight size={15} /> },
       { href: "/transfers/receive", label: "Received Items", icon: <ArrowDownLeft size={15} /> },
     ],
@@ -329,10 +332,24 @@ function NavLink({
       ? "bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.4)]"
       : "bg-orange-500 shadow-[0_0_6px_rgba(249,115,22,0.4)]";
 
+  const handleClick = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (!item.reloadWhenActive || window.location.pathname !== item.href) return;
+    // Let modifier clicks (new tab/window) behave normally.
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    event.preventDefault();
+    // Full reload to the clean URL (drops ?tab=… etc.) for a fresh form.
+    if (window.location.pathname + window.location.search === item.href) {
+      window.location.reload();
+    } else {
+      window.location.assign(item.href);
+    }
+  };
+
   if (collapsed) {
     return (
       <Link
         href={item.href}
+        onClick={handleClick}
         title={item.label}
         className={`relative mx-auto mb-0.5 flex h-9 w-9 items-center justify-center rounded-lg transition-colors duration-150 ${
           active
@@ -354,6 +371,7 @@ function NavLink({
   return (
     <Link
       href={item.href}
+      onClick={handleClick}
       className={`group relative mb-0.5 flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-[13px] font-medium transition-colors duration-150 ${
         active
           ? activeStyle

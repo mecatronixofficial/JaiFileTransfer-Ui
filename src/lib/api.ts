@@ -17,18 +17,6 @@ import { getErrorMessage } from "@/lib/error-handler";
 ========================= */
 
 export const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "/api/v1";
-const configuredBackendUrl =
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
-  (process.env.NODE_ENV === "development"
-    ? "http://localhost:5000"
-    : "https://jai-file-transfer-server.vercel.app");
-const BACKEND_URL = configuredBackendUrl
-  ? `${/^https?:\/\//i.test(configuredBackendUrl) ? "" : "https://"}${configuredBackendUrl}`.replace(
-      /\/(?:api\/v1)?\/?$/i,
-      "",
-    )
-  : undefined;
-const DIRECT_BACKEND_API_URL = BACKEND_URL ? `${BACKEND_URL}/api/v1` : undefined;
 const MAX_429_RETRIES = 3;
 const DEFAULT_429_WAIT_MS = 5000;
 const MAX_429_WAIT_MS = 30000;
@@ -36,6 +24,19 @@ const MAX_PART_UPLOAD_RETRIES = 3;
 const PART_UPLOAD_RETRY_BASE_MS = 1000;
 const SIMPLE_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
 const PART_UPLOAD_TIMEOUT_MS = 30 * 60 * 1000;
+const FINALIZE_TIMEOUT_MS = 2 * 60 * 1000;
+/** Pre-sign all part URLs at initiate time up to this many parts (keeps the response small). */
+const MAX_UPFRONT_PART_URLS = 200;
+const MIN_PART_BYTES = 5 * 1024 * 1024;
+const MAX_PART_BYTES = 128 * 1024 * 1024;
+const MAX_PARTS = 10000;
+
+/**
+ * Set once a browser → storage PUT is rejected before any byte is sent
+ * (typically the R2 bucket CORS policy not allowing this site's origin).
+ * Later uploads then skip the doomed direct attempt and use the API instead.
+ */
+let directStorageBlocked = false;
 
 /* =========================
    TYPES
@@ -94,10 +95,6 @@ function unwrapData<T = Record<string, unknown>>(payload: unknown): T {
   return ((current ?? {}) as T);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function assertUsableUploadUrl(rawUrl: string, partNumber: number): string {
   try {
     const parsed = new URL(rawUrl);
@@ -118,16 +115,34 @@ function assertUsableUploadUrl(rawUrl: string, partNumber: number): string {
   }
 }
 
-function putPresignedPart(
+class StorageUploadError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null,
+    readonly bytesSent: number,
+  ) {
+    super(message);
+    this.name = "StorageUploadError";
+  }
+}
+
+/** PUT bytes straight to a presigned storage URL (R2), bypassing the API servers. */
+function putToStorage(
   url: string,
-  chunk: Blob,
-  partNumber: number,
-  signal: AbortSignal | undefined,
-  onProgress: (loaded: number) => void,
+  body: Blob,
+  options: {
+    contentType?: string;
+    requireEtag?: boolean;
+    label: string;
+    signal?: AbortSignal;
+    onProgress?: (loaded: number) => void;
+  },
 ): Promise<string> {
+  const { contentType, requireEtag, label, signal, onProgress } = options;
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     let settled = false;
+    let bytesSent = 0;
 
     const cleanup = () => {
       settled = true;
@@ -153,21 +168,21 @@ function putPresignedPart(
     xhr.open("PUT", url, true);
     xhr.responseType = "text";
     xhr.timeout = PART_UPLOAD_TIMEOUT_MS;
+    if (contentType) xhr.setRequestHeader("Content-Type", contentType);
 
     signal?.addEventListener("abort", abort, { once: true });
 
     xhr.upload.onprogress = (event) => {
-      if (event.lengthComputable) {
-        onProgress(event.loaded);
-      }
+      bytesSent = event.loaded;
+      onProgress?.(event.loaded);
     };
 
     xhr.onerror = () => {
-      fail(new Error("ERR_NETWORK"));
+      fail(new StorageUploadError("ERR_NETWORK", null, bytesSent));
     };
 
     xhr.ontimeout = () => {
-      fail(new Error(`Upload part ${partNumber} timed out`));
+      fail(new StorageUploadError(`${label} timed out`, null, bytesSent));
     };
 
     xhr.onabort = () => {
@@ -176,13 +191,14 @@ function putPresignedPart(
 
     xhr.onload = () => {
       if (xhr.status < 200 || xhr.status >= 300) {
-        fail(new Error(`HTTP ${xhr.status}`));
+        fail(new StorageUploadError(`HTTP ${xhr.status}`, xhr.status, bytesSent));
         return;
       }
 
-      const etag = xhr.getResponseHeader("ETag")?.replace(/^"|"$/g, "");
-      if (!etag) {
-        fail(new Error(`Upload part ${partNumber} completed without an ETag`));
+      const etag = xhr.getResponseHeader("ETag")?.replace(/^"|"$/g, "") ?? "";
+      if (requireEtag && !etag) {
+        // The PUT succeeded but the bucket CORS policy hides the ETag header.
+        fail(new StorageUploadError("ERR_ETAG_HIDDEN", xhr.status, bytesSent));
         return;
       }
 
@@ -190,64 +206,80 @@ function putPresignedPart(
       resolve(etag);
     };
 
-    xhr.send(chunk);
+    xhr.send(body);
   });
+}
+
+/**
+ * True when storage refused the request before any bytes were sent — the
+ * signature of a CORS block (or a hidden ETag), not a flaky connection.
+ */
+function isStorageBlockedError(error: unknown): boolean {
+  if (!(error instanceof StorageUploadError)) return false;
+  if (error.message === "ERR_ETAG_HIDDEN") return true;
+  if (error.message !== "ERR_NETWORK" || error.bytesSent > 0) return false;
+  return typeof navigator === "undefined" || navigator.onLine !== false;
 }
 
 function isRetryableUploadError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === "AbortError") return false;
-  if (error instanceof Error) {
-    if (error.message === "ERR_NETWORK") return true;
-    if (error.message.includes("timed out")) return true;
-    if (/^HTTP (429|5\d\d)$/.test(error.message)) return true;
-    if (/^HTTP \d+$/.test(error.message)) return false;
+  if (error instanceof StorageUploadError) {
+    if (error.status === null) return true; // network drop / timeout
+    // 403 usually means the presigned URL expired; a fresh URL is fetched on retry.
+    return [403, 408, 429].includes(error.status) || error.status >= 500;
   }
   if (!axios.isAxiosError(error)) return false;
   if (!error.response) return true;
   const status = error.response.status;
-  return status === 429 || status >= 500;
+  return status === 408 || status === 429 || status >= 500;
 }
 
-function shouldFallbackToServerPartUpload(error: unknown): boolean {
-  if (error instanceof Error) {
-    return error.message === "ERR_NETWORK" || error.message.includes("timed out");
-  }
-  return axios.isAxiosError(error) && !error.response;
+function storageCorsHelp(): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "this site";
+  return `The storage bucket is blocking uploads from ${origin}. Add ${origin} to the R2 bucket CORS policy (methods GET, HEAD, PUT; headers *; expose ETag).`;
 }
 
-function getPartUploadErrorMessage(error: unknown, partNumber: number): string {
+function getPartUploadErrorMessage(error: unknown, label: string): string {
   if (error instanceof DOMException && error.name === "AbortError") {
     return "Upload canceled";
   }
 
-  if (error instanceof Error && error.message === "ERR_NETWORK") {
-    return [
-      `Network error while uploading part ${partNumber}.`,
-      "Browser reported: ERR_NETWORK.",
-      "Check the R2 bucket CORS AllowedOrigins/AllowedMethods/AllowedHeaders and the presigned upload URL.",
-    ].join(" ");
+  if (typeof navigator !== "undefined" && navigator.onLine === false) {
+    return "You appear to be offline. Check your connection and retry.";
   }
 
-  if (error instanceof Error && /^HTTP \d+$/.test(error.message)) {
-    return `Upload part ${partNumber} failed with ${error.message}`;
+  if (error instanceof StorageUploadError) {
+    if (isStorageBlockedError(error)) return `${label}: ${storageCorsHelp()}`;
+    if (error.message === "ERR_NETWORK") return `${label}: the connection dropped. Please retry.`;
+    if (error.status === 403) return `${label}: the upload link expired. Please retry.`;
+    if (error.status) return `${label} failed (storage returned HTTP ${error.status})`;
+    return `${label}: ${error.message}`;
   }
 
-  if (axios.isAxiosError(error) && !error.response) {
-    const isOffline = typeof navigator !== "undefined" && !navigator.onLine;
-    if (isOffline) return "You appear to be offline. Check your connection.";
-    const detail = error.code || error.message;
-    return [
-      `Network error while uploading part ${partNumber}.`,
-      detail ? `Browser reported: ${detail}.` : "",
-      "Check storage CORS and the presigned upload URL.",
-    ].filter(Boolean).join(" ");
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    if (!error.response) return `${label}: network error. Please retry.`;
+    if (status === 401) return "Your session has expired. Please sign in again and retry.";
+    if (status === 413) {
+      return `${label}: the server rejected the chunk as too large. ${storageCorsHelp()}`;
+    }
+    return `${label}: ${getErrorMessage(error)}`;
   }
 
-  if (axios.isAxiosError(error) && error.response?.status) {
-    return `Upload part ${partNumber}: ${getErrorMessage(error)}`;
-  }
+  return (error as Error)?.message || `${label} failed`;
+}
 
-  return (error as Error)?.message || `Upload part ${partNumber} failed`;
+/** Pick a part size that keeps the part count within storage limits. */
+function choosePartSize(fileSize: number): number {
+  let partSize = Math.max(UPLOAD_LIMITS.PART_SIZE, MIN_PART_BYTES);
+  while (Math.ceil(fileSize / partSize) > MAX_PARTS && partSize < MAX_PART_BYTES) {
+    partSize *= 2;
+  }
+  return Math.min(partSize, MAX_PART_BYTES);
+}
+
+function contentTypedBody(file: File, contentType: string): Blob {
+  return file.type === contentType ? file : file.slice(0, file.size, contentType);
 }
 
 /* =========================
@@ -421,16 +453,6 @@ export function getApi(): AxiosInstance {
   );
 
   return api;
-}
-
-function getLargeUploadApi(): AxiosInstance {
-  if (!DIRECT_BACKEND_API_URL) return getApi();
-
-  return axios.create({
-    baseURL: DIRECT_BACKEND_API_URL,
-    withCredentials: true,
-    timeout: PART_UPLOAD_TIMEOUT_MS,
-  });
 }
 
 async function postUploadForm(
@@ -627,7 +649,7 @@ export const filesApi = {
     uploadSessionId?: string;
     tags?: string[];
   }) => {
-    const res = await getApi().post("/files", data);
+    const res = await getApi().post("/files", data, { timeout: FINALIZE_TIMEOUT_MS });
     notifyAppDataChanged({
       source: "upload",
       files: true,
@@ -674,7 +696,7 @@ export const filesApi = {
     relativePath?: string;
     tags?: string[];
   }[]) => {
-    const res = await getApi().post("/files/batch", { files });
+    const res = await getApi().post("/files/batch", { files }, { timeout: FINALIZE_TIMEOUT_MS });
     notifyAppDataChanged({
       source: "upload",
       files: true,
@@ -710,38 +732,124 @@ export const uploadApi = {
       return uploadApi.uploadMultipartFile(file, folderId, onProgress, signal);
     }
 
+    return uploadApi.uploadSingleFile(file, folderId, onProgress, signal);
+  },
+
+  /**
+   * Upload a file below the multipart threshold. Bytes go straight from the
+   * browser to storage with a presigned URL (fast, no API body limits). If the
+   * bucket blocks this origin, small files fall back to the API proxy.
+   */
+  uploadSingleFile: async (
+    file: File,
+    folderId?: string,
+    onProgress?: UploadProgressCallback,
+    signal?: AbortSignal,
+  ): Promise<UploadApiResponse> => {
     const contentType = resolveUploadContentType(file);
-    const uploadBody = file.type === contentType
-      ? file
-      : file.slice(0, file.size, contentType);
+
+    if (!directStorageBlocked) {
+      try {
+        const presignRes = await uploadApi.getPresignedUrl(
+          { filename: file.name, contentType, size: file.size, folderId },
+          signal,
+        );
+        const presign = unwrapData<{
+          url?: string;
+          uploadUrl?: string;
+          mimeType?: string;
+          key?: string;
+          fileId?: string;
+          uploadSessionId?: string;
+        }>(presignRes.data);
+        const url = presign.url ?? presign.uploadUrl;
+        if (!url || !presign.key) throw new Error("Could not get an upload URL");
+        const signedType = presign.mimeType || contentType;
+
+        for (let attempt = 1; ; attempt += 1) {
+          try {
+            await putToStorage(url, contentTypedBody(file, signedType), {
+              contentType: signedType,
+              label: `Upload of ${file.name}`,
+              signal,
+              onProgress: (loaded) => {
+                if (!onProgress || file.size === 0) return;
+                const bounded = Math.min(loaded, file.size);
+                onProgress(Math.min(99, Math.round((bounded * 100) / file.size)), bounded, file.size);
+              },
+            });
+            break;
+          } catch (error) {
+            signal?.throwIfAborted();
+            if (isStorageBlockedError(error)) throw error;
+            if (attempt >= MAX_PART_UPLOAD_RETRIES || !isRetryableUploadError(error)) {
+              throw new Error(getPartUploadErrorMessage(error, `Upload of ${file.name}`));
+            }
+            await waitForUploadRetry(PART_UPLOAD_RETRY_BASE_MS * attempt, signal ?? new AbortController().signal);
+          }
+        }
+
+        const metadataRes = await filesApi.create({
+          key: presign.key,
+          originalName: file.name,
+          size: file.size,
+          mimeType: signedType,
+          folderId,
+          ...(presign.fileId ? { fileId: presign.fileId } : {}),
+          ...(presign.uploadSessionId ? { uploadSessionId: presign.uploadSessionId } : {}),
+        });
+        onProgress?.(100, file.size, file.size);
+        const metadata = unwrapData<Record<string, unknown>>(metadataRes.data);
+        return {
+          ...metadataRes,
+          data: {
+            success: true,
+            message: "File uploaded successfully",
+            data: {
+              ...metadata,
+              key: (metadata.key as string | undefined) ?? presign.key,
+              ...(presign.uploadSessionId ? { uploadSessionId: presign.uploadSessionId } : {}),
+            },
+          },
+        };
+      } catch (error) {
+        if (!isStorageBlockedError(error)) throw error;
+        directStorageBlocked = true;
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[upload] Direct storage upload blocked; using API fallback.", storageCorsHelp());
+        }
+      }
+    }
+
+    if (file.size > UPLOAD_LIMITS.SIMPLE_MAX_BYTES) {
+      // Too big for the API proxy body limit — multipart with server parts is the last resort.
+      return uploadApi.uploadMultipartFile(file, folderId, onProgress, signal);
+    }
+
     const formData = new FormData();
-    formData.append("file", uploadBody, file.name);
+    formData.append("file", contentTypedBody(file, contentType), file.name);
     if (folderId) formData.append("folderId", folderId);
 
-    // POST /upload/file — server-side upload to R2 (no browser CORS needed).
+    // POST /upload/file — server-side upload to storage (no bucket CORS needed).
     // Content-Type must be unset so the browser can attach the multipart boundary.
-    return postUploadForm("/upload/file", formData, {
+    const res = await postUploadForm("/upload/file", formData, {
       signal,
       timeout: SIMPLE_UPLOAD_TIMEOUT_MS,
       headers: { "Content-Type": undefined },
       onUploadProgress: (progressEvent: AxiosProgressEvent) => {
         if (onProgress && progressEvent.total) {
           const loaded = Math.min(progressEvent.loaded, progressEvent.total);
-          const percent = Math.round(
-            (loaded * 100) / progressEvent.total,
-          );
-          onProgress(percent, loaded, progressEvent.total);
+          onProgress(Math.round((loaded * 100) / progressEvent.total), loaded, progressEvent.total);
         }
       },
-    }).then((res) => {
-      notifyAppDataChanged({
-        source: "upload",
-        files: true,
-        folders: Boolean(folderId),
-        storage: true,
-      });
-      return res;
     });
+    notifyAppDataChanged({
+      source: "upload",
+      files: true,
+      folders: Boolean(folderId),
+      storage: true,
+    });
+    return res;
   },
 
   uploadMultipartFile: async (
@@ -752,11 +860,11 @@ export const uploadApi = {
   ): Promise<UploadApiResponse> => {
     signal?.throwIfAborted();
     const contentType = resolveUploadContentType(file);
-    const requestedPartSize = UPLOAD_LIMITS.PART_SIZE;
+    const requestedPartSize = choosePartSize(file.size);
+    const requestedPartCount = Math.ceil(file.size / requestedPartSize);
     let progressByPart: number[] = [];
     let uploadId = "";
     let key = "";
-    let useServerPartUpload = false;
 
     const updateProgress = (partIndex: number, loaded: number) => {
       progressByPart[partIndex] = loaded;
@@ -777,8 +885,13 @@ export const uploadApi = {
         size: file.size,
         folderId,
         partSize: requestedPartSize,
-      });
-      const initiateData = unwrapData<MultipartInitiateData>(initiateRes.data);
+        // Pre-sign every part URL in one request for typical files; this
+        // removes one API round trip per part.
+        ...(requestedPartCount <= MAX_UPFRONT_PART_URLS && !directStorageBlocked
+          ? { partCount: requestedPartCount }
+          : {}),
+      }, signal);
+      const initiateData = unwrapData<MultipartInitiateData & { urls?: string[] }>(initiateRes.data);
       uploadId = initiateData.uploadId ?? "";
       key = initiateData.key ?? "";
       const resolvedPartSize = initiateData.partSize ?? requestedPartSize;
@@ -793,84 +906,73 @@ export const uploadApi = {
 
       const resolvedPartCount = Math.ceil(file.size / resolvedPartSize);
       progressByPart = new Array(resolvedPartCount).fill(0) as number[];
-      const usedPartUrls = new Map<string, number>();
+      const partUrls: (string | undefined)[] = Array.isArray(initiateData.urls) &&
+        initiateData.urls.length === resolvedPartCount
+        ? [...initiateData.urls]
+        : [];
+
+      const resolvePartUrl = async (partNumber: number, partSignal: AbortSignal) => {
+        const cached = partUrls[partNumber - 1];
+        if (cached) return assertUsableUploadUrl(cached, partNumber);
+        const partUrlRes = await uploadApi.getPartUrl({ uploadId, key, partNumber }, partSignal);
+        const partUrlData = unwrapData<MultipartPartUrlData>(partUrlRes.data);
+        const url = partUrlData.url ?? partUrlData.uploadUrl ?? partUrlData.presignedUrl;
+        if (!url) throw new Error(`Could not get upload URL for part ${partNumber}`);
+        partUrls[partNumber - 1] = url;
+        return assertUsableUploadUrl(url, partNumber);
+      };
 
       const partTasks = Array.from({ length: resolvedPartCount }, (_, index) => async (partSignal: AbortSignal) => {
         const partNumber = index + 1;
         const start = index * resolvedPartSize;
         const end = Math.min(start + resolvedPartSize, file.size);
         const chunk = file.slice(start, end);
+        const label = `Upload part ${partNumber}`;
 
-        for (let attempt = 1; attempt <= MAX_PART_UPLOAD_RETRIES; attempt += 1) {
+        for (let attempt = 1; ; attempt += 1) {
           try {
             partSignal.throwIfAborted();
-            const partUrlRes = await uploadApi.getPartUrl({ uploadId, key, partNumber }, partSignal);
-            const partUrlData = unwrapData<MultipartPartUrlData>(partUrlRes.data);
-            const url = partUrlData.url ?? partUrlData.uploadUrl ?? partUrlData.presignedUrl;
-
-            if (!url) {
-              throw new Error(`Could not get upload URL for part ${partNumber}`);
-            }
-
-            const uploadUrl = assertUsableUploadUrl(url, partNumber);
-            const existingPartNumber = usedPartUrls.get(uploadUrl);
-            if (existingPartNumber !== undefined && existingPartNumber !== partNumber) {
-              throw new Error(
-                `Upload URL for part ${partNumber} was already issued for part ${existingPartNumber}`,
-              );
-            }
-            usedPartUrls.set(uploadUrl, partNumber);
-
             let etag: string;
-            if (useServerPartUpload) {
+            if (directStorageBlocked) {
               etag = await uploadApi.uploadMultipartPartViaServer(
-                {
-                  uploadId,
-                  key,
-                  partNumber,
-                  chunk,
-                },
+                { uploadId, key, partNumber, chunk },
                 partSignal,
                 (loaded) => updateProgress(index, loaded),
               );
             } else {
+              const uploadUrl = await resolvePartUrl(partNumber, partSignal);
               try {
-                etag = await putPresignedPart(
-                  uploadUrl,
-                  chunk,
-                  partNumber,
-                  partSignal,
-                  (loaded) => updateProgress(index, loaded),
-                );
+                etag = await putToStorage(uploadUrl, chunk, {
+                  requireEtag: true,
+                  label,
+                  signal: partSignal,
+                  onProgress: (loaded) => updateProgress(index, loaded),
+                });
               } catch (directError) {
-                if (!shouldFallbackToServerPartUpload(directError)) throw directError;
-                useServerPartUpload = true;
+                if (!isStorageBlockedError(directError)) throw directError;
+                // Bucket CORS blocks this origin: switch every part to the API path.
+                directStorageBlocked = true;
+                updateProgress(index, 0);
                 etag = await uploadApi.uploadMultipartPartViaServer(
-                  {
-                    uploadId,
-                    key,
-                    partNumber,
-                    chunk,
-                  },
+                  { uploadId, key, partNumber, chunk },
                   partSignal,
                   (loaded) => updateProgress(index, loaded),
                 );
               }
             }
             updateProgress(index, chunk.size);
-
             return { ETag: etag, PartNumber: partNumber };
           } catch (error) {
             updateProgress(index, 0);
             partSignal.throwIfAborted();
             if (attempt >= MAX_PART_UPLOAD_RETRIES || !isRetryableUploadError(error)) {
-              throw new Error(getPartUploadErrorMessage(error, partNumber));
+              throw new Error(getPartUploadErrorMessage(error, label));
             }
-            await waitForUploadRetry(PART_UPLOAD_RETRY_BASE_MS * attempt, partSignal);
+            // Drop a possibly expired presigned URL so the retry gets a fresh one.
+            partUrls[index] = undefined;
+            await waitForUploadRetry(PART_UPLOAD_RETRY_BASE_MS * attempt * attempt, partSignal);
           }
         }
-
-        throw new Error(`Upload part ${partNumber} failed`);
       });
 
       const parts = await runUploadTasks(partTasks, UPLOAD_LIMITS.MAX_CONCURRENT_PARTS, signal);
@@ -882,6 +984,7 @@ export const uploadApi = {
       const uploadSessionId =
         (completePayload.uploadSessionId as string | undefined) ??
         (initiateData.uploadSessionId ?? initiateData.sessionId ?? initiateData.file?.uploadSessionId);
+      const fileId = (initiateData as { fileId?: string }).fileId;
 
       const metadataRes = await filesApi.create({
         key: (completePayload.key as string | undefined) ?? key,
@@ -889,6 +992,7 @@ export const uploadApi = {
         size: file.size,
         mimeType: contentType,
         folderId,
+        ...(fileId ? { fileId } : {}),
         ...(uploadSessionId ? { uploadSessionId } : {}),
       });
 
@@ -925,12 +1029,12 @@ export const uploadApi = {
     contentType: string;
     size: number;
     folderId?: string;
-  }) => getApi().post("/upload/presigned-url", {
+  }, signal?: AbortSignal) => getApi().post("/upload/presigned-url", {
     fileName:  data.filename,
     mimeType:  data.contentType,
     fileSize:  data.size,
     folderId:  data.folderId,
-  }),
+  }, { signal }),
 
   initiateMultipart: (data: {
     filename: string;
@@ -938,13 +1042,15 @@ export const uploadApi = {
     size: number;
     folderId?: string;
     partSize?: number;
-  }) => getApi().post("/upload/multipart/initiate", {
+    partCount?: number;
+  }, signal?: AbortSignal) => getApi().post("/upload/multipart/initiate", {
     fileName:  data.filename,
     mimeType:  data.contentType,
     fileSize:  data.size,
     folderId:  data.folderId,
     partSize:  data.partSize,
-  }),
+    partCount: data.partCount,
+  }, { signal, timeout: FINALIZE_TIMEOUT_MS }),
 
   completeMultipart: (data: {
     uploadId: string;
@@ -954,7 +1060,7 @@ export const uploadApi = {
     uploadId: data.uploadId,
     key: data.key,
     parts: data.parts.map((p) => ({ partNumber: p.PartNumber, etag: p.ETag })),
-  }),
+  }, { timeout: FINALIZE_TIMEOUT_MS }),
 
   /** Get a presigned URL for uploading a single part (used during multipart). */
   getPartUrl: (data: { uploadId: string; key: string; partNumber: number }, signal?: AbortSignal) =>
@@ -972,7 +1078,10 @@ export const uploadApi = {
     formData.append("partNumber", String(data.partNumber));
     formData.append("part", data.chunk, `part-${data.partNumber}`);
 
-    const res = await getLargeUploadApi().post("/upload/multipart/upload-part", formData, {
+    // Same-origin request: carries the session cookies and gets the 401 → refresh
+    // retry. (Calling the backend domain directly has no cookies in production,
+    // which caused "Invalid or expired token" on live uploads.)
+    const res = await getApi().post("/upload/multipart/upload-part", formData, {
       signal,
       timeout: PART_UPLOAD_TIMEOUT_MS,
       headers: { "Content-Type": undefined },
