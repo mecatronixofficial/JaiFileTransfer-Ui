@@ -63,6 +63,7 @@ import {
 } from "lucide-react";
 import { formatBytes, formatRelative } from "@/lib/utils";
 import { UPLOAD_LIMITS } from "@/helper/data_helper";
+import { getFileUploadConcurrency } from "@/lib/upload-tasks";
 import {
   getTransferFileCount,
   getTransfersFromResponse,
@@ -250,12 +251,8 @@ function fileIdentity(file: File, relativePath?: string) {
   ].join("::");
 }
 
-function getUploadFileConcurrency(files: SendFile[], totalSize: number) {
-  if (files.length <= 1) return 1;
-  const hasMultipartFile = files.some((sf) => sf.file.size >= UPLOAD_LIMITS.MULTIPART_THRESHOLD);
-  if (totalSize >= 2 * 1024 ** 3) return 1;
-  if (hasMultipartFile) return 2;
-  return 4;
+function getUploadFileConcurrency(files: SendFile[]) {
+  return getFileUploadConcurrency(files.map((sf) => sf.file.size));
 }
 
 function useSmoothProgress(target: number, active = true) {
@@ -812,21 +809,58 @@ export default function SendPage() {
     setFiles((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
   }
 
-  const addEmail = () => {
-    const { valid, invalid } = parseRecipientEmails(emailInput);
+  /** Turn typed text into recipient chips. Invalid addresses stay in the input for editing. */
+  const addEmail = (raw: string = emailInput) => {
+    const { valid, invalid } = parseRecipientEmails(raw);
+    if (valid.length > 0) {
+      setEmails((previous) => {
+        const existing = new Set(previous.map((email) => email.toLowerCase()));
+        return [...previous, ...valid.filter((email) => !existing.has(email.toLowerCase()))];
+      });
+    }
     if (invalid.length > 0) {
       showToast.error(`Enter a valid email address${invalid.length > 1 ? "es" : ""}`);
+      setEmailInput(invalid.join(" "));
       return;
     }
-    if (valid.length === 0) return;
-    setEmails((previous) => {
-      const existing = new Set(previous.map((email) => email.toLowerCase()));
-      return [...previous, ...valid.filter((email) => !existing.has(email.toLowerCase()))];
-    });
     setEmailInput("");
   };
+  const onEmailChange = (value: string) => {
+    // Space, comma or semicolon finishes an address — also covers paste and
+    // mobile keyboards that don't report key presses.
+    const lastSeparator = Math.max(value.lastIndexOf(" "), value.lastIndexOf(","), value.lastIndexOf(";"));
+    if (lastSeparator === -1) {
+      setEmailInput(value);
+      return;
+    }
+    const completed = value.slice(0, lastSeparator);
+    const rest = value.slice(lastSeparator + 1);
+    const { valid, invalid } = parseRecipientEmails(completed);
+    if (valid.length > 0) {
+      setEmails((previous) => {
+        const existing = new Set(previous.map((email) => email.toLowerCase()));
+        return [...previous, ...valid.filter((email) => !existing.has(email.toLowerCase()))];
+      });
+    }
+    if (invalid.length > 0) {
+      showToast.error(`Enter a valid email address${invalid.length > 1 ? "es" : ""}`);
+      setEmailInput(invalid.join(" ") + (rest ? ` ${rest}` : ""));
+      return;
+    }
+    setEmailInput(rest);
+  };
   const onEmailKey = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter" || e.key === ",") { e.preventDefault(); addEmail(); }
+    const value = e.currentTarget.value;
+    if (e.key === "Enter" || e.key === "," || e.key === ";" || e.key === " ") {
+      e.preventDefault();
+      addEmail(value);
+    } else if (e.key === "Tab" && value.trim()) {
+      e.preventDefault();
+      addEmail(value);
+    } else if (e.key === "Backspace" && !value && emails.length > 0) {
+      e.preventDefault();
+      setEmails((previous) => previous.slice(0, -1));
+    }
   };
 
   async function copyLink() {
@@ -928,7 +962,7 @@ export default function SendPage() {
 
     try {
       setSendPhase("uploading");
-      const uploadConcurrency = getUploadFileConcurrency(files, totalSize);
+      const uploadConcurrency = getUploadFileConcurrency(files);
       /* Upload new files with dynamic concurrency; large multipart files already upload parts in parallel. */
       const results = files.length > 0
         ? await pool(files.map((sf) => () => uploadFile(sf)), uploadConcurrency)
@@ -1113,6 +1147,17 @@ export default function SendPage() {
 
   /* ── Derived ── */
   const isSending       = sendPhase === "uploading" || sendPhase === "creating";
+
+  // Warn before a reload/close (e.g. re-clicking "New Transfer") would cancel an upload in progress.
+  useEffect(() => {
+    if (!isSending) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [isSending]);
   const totalSize       = files.reduce((s, f) => s + f.file.size, 0)
                         + preloadedFiles.reduce((s, f) => s + f.size, 0);
   const uploadTotalSize = files.reduce((s, f) => s + f.file.size, 0);
@@ -1892,10 +1937,11 @@ export default function SendPage() {
                                   </button>
                                 </span>
                               ))}
-                              <input id="email-chip-input" type="email"
+                              <input id="email-chip-input" type="text" inputMode="email"
+                                autoComplete="email" autoCapitalize="none" spellCheck={false}
                                 value={emailInput}
-                                onChange={(e) => setEmailInput(e.target.value)}
-                                onKeyDown={onEmailKey} onBlur={addEmail}
+                                onChange={(e) => onEmailChange(e.target.value)}
+                                onKeyDown={onEmailKey} onBlur={() => addEmail()}
                                 disabled={isSending}
                                 placeholder={emails.length === 0 ? "Add email addresses…" : "Add more…"}
                                 className="min-w-35 flex-1 bg-transparent text-sm text-(--text) outline-none placeholder:text-gray-400"
@@ -1903,7 +1949,7 @@ export default function SendPage() {
                             </div>
                           </div>
                           <p className="mt-1.5 flex items-center gap-1 text-[11px] text-(--text-muted)">
-                            <Info size={9} /> Press Enter or comma to add each address
+                            <Info size={9} /> Press Space, Enter or comma after each address · Backspace removes the last one
                           </p>
                         </div>
                         <div>
